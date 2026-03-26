@@ -1,0 +1,2 @@
+ALTER TABLE memories ADD COLUMN title TEXT;
+

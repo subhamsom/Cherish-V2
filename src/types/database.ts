@@ -53,6 +53,7 @@ export type Database = {
           pinned: boolean | null
           price: number | null
           tags: string[] | null
+          title: string | null
           type: string
           updated_at: string | null
           user_id: string
@@ -70,6 +71,7 @@ export type Database = {
           pinned?: boolean | null
           price?: number | null
           tags?: string[] | null
+          title?: string | null
           type: string
           updated_at?: string | null
           user_id: string
@@ -87,6 +89,7 @@ export type Database = {
           pinned?: boolean | null
           price?: number | null
           tags?: string[] | null
+          title?: string | null
           type?: string
           updated_at?: string | null
           user_id?: string

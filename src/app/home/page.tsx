@@ -79,6 +79,7 @@ export default async function HomePage() {
   let memories:
     | Array<{
         id: string;
+        title: string | null;
         content: string;
         type: string;
         created_at: string | null;
@@ -88,7 +89,7 @@ export default async function HomePage() {
     const memoryResult = await withTimeout(
       supabase
         .from("memories")
-        .select("id, content, type, created_at")
+        .select("id, title, content, type, created_at")
         .eq("partner_id", partner.id)
         .order("created_at", { ascending: false })
         .limit(20),
@@ -97,6 +98,7 @@ export default async function HomePage() {
     const { data, error } = memoryResult as {
       data: Array<{
         id: string;
+        title: string | null;
         content: string;
         type: string;
         created_at: string | null;
@@ -145,7 +147,8 @@ export default async function HomePage() {
           <ul>
             {memories.map((memory) => (
               <li key={memory.id}>
-                <p>{memory.content}</p>
+                <p>{memory.title ?? memory.content}</p>
+                <p style={{ fontSize: "0.9em", opacity: 0.8 }}>{memory.content}</p>
                 <p>Type: {memory.type}</p>
                 <p>
                   Created:{" "}
