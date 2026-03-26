@@ -59,22 +59,29 @@ export default function OnboardingPage() {
         }
       }
 
-      const insert = await supabase
-        .from("partners")
-        .insert({
-          user_id: user.id,
-          name,
-          photo_url,
-        })
-        .select("id")
-        .maybeSingle();
+      const save = await fetch("/api/onboarding/partner", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, photo_url }),
+      });
 
-      if (insert.error) {
-        console.error("Supabase partner insert failed:", insert.error);
-        setError("Could not save your partner. Please try again.");
+      const saveJson = (await save.json()) as {
+        error?: string;
+        details?: string;
+        partner?: unknown;
+      };
+
+      if (!save.ok) {
+        console.error("Partner save API failed:", save.status, saveJson);
+        setError(
+          saveJson.error
+            ? saveJson.error
+            : "Could not save your partner. Please try again.",
+        );
         return;
       }
-
       router.push("/home");
     } finally {
       setSubmitting(false);
