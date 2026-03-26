@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import type { NextRequest, NextResponse } from "next/server";
 
 function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,20 +16,23 @@ function getSupabaseConfig() {
 }
 
 /**
- * Server client for App Router route handlers/components.
- * Uses `next/headers` cookie store so auth session persists via SSR.
+ * Server client for Next.js App Router route handlers.
+ *
+ * Writes refreshed auth cookies onto the provided response so redirects
+ * immediately result in an authenticated next request.
  */
-export async function createServerSupabaseClient(): Promise<SupabaseClient> {
+export function createServerSupabaseClient(
+  req: NextRequest,
+  res: NextResponse,
+): SupabaseClient {
   const { url, anonKey } = getSupabaseConfig();
-  const cookieStore = await cookies();
 
   return createServerClient(url, anonKey, {
     cookies: {
-      getAll: () =>
-        cookieStore.getAll().map((c) => ({ name: c.name, value: c.value })),
+      getAll: () => req.cookies.getAll(),
       setAll: (cookiesToSet) => {
         cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set({ name, value, ...options });
+          res.cookies.set(name, value, options);
         });
       },
     },

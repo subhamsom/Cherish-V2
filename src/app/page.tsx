@@ -14,7 +14,10 @@ export default function Home() {
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo },
+        options: {
+          redirectTo,
+          scopes: "openid email profile",
+        },
       });
 
       if (error) throw error;

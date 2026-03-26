@@ -1,18 +1,51 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
-  const supabase = await createServerSupabaseClient();
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
 
-  const redirectUrl = new URL("/", req.url);
+  if (code) {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options),
+            );
+          },
+        },
+      },
+    );
 
-  const { error } = await supabase.auth.exchangeCodeForSession(req.url);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-  if (error) {
-    console.error("Supabase OAuth callback error:", error);
+      if (user) {
+        const { data: partner } = await supabase
+          .from("partners")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
+
+        return NextResponse.redirect(
+          new URL(partner ? "/home" : "/onboarding", origin),
+        );
+      }
+    }
+    console.error("Auth callback error:", error);
   }
 
-  // After exchanging the auth code for a session, send the user back to the app.
-  return NextResponse.redirect(redirectUrl);
+  return NextResponse.redirect(new URL("/", origin));
 }
 
