@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
+import MemoryListClient from "./MemoryListClient";
 
 export const dynamic = "force-dynamic";
 
@@ -139,28 +140,7 @@ export default async function HomePage() {
         <Link href="/memories/new">Add Memory</Link>
       </section>
 
-      <section>
-        <h2>Recent Memories</h2>
-        {!memories || memories.length === 0 ? (
-          <p>No memories yet. Add your first one.</p>
-        ) : (
-          <ul>
-            {memories.map((memory) => (
-              <li key={memory.id}>
-                <p>{memory.title ?? memory.content}</p>
-                <p style={{ fontSize: "0.9em", opacity: 0.8 }}>{memory.content}</p>
-                <p>Type: {memory.type}</p>
-                <p>
-                  Created:{" "}
-                  {memory.created_at
-                    ? new Date(memory.created_at).toLocaleString()
-                    : "-"}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <MemoryListClient initialMemories={memories ?? []} />
     </main>
   );
 }
