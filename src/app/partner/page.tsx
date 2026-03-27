@@ -25,7 +25,6 @@ export default async function PartnerPage() {
 
   return (
     <ProfileClient
-      userId={user.id}
       userEmail={user.email ?? "unknown@example.com"}
       partner={partner}
     />

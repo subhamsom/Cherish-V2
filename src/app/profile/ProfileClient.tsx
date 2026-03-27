@@ -15,11 +15,9 @@ type Partner = {
 };
 
 export default function ProfileClient({
-  userId,
   userEmail,
   partner,
 }: {
-  userId: string;
   userEmail: string;
   partner: Partner | null;
 }) {
@@ -48,18 +46,19 @@ export default function ProfileClient({
 
     setSaving(true);
     try {
-      const { error: upsertError } = await supabase.from("partners").upsert(
-        {
-          user_id: userId,
+      const response = await fetch("/api/partners", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           name: trimmedName,
           photo_url: photoUrl.trim() || null,
           relationship_start_date: relationshipStartDate || null,
-        },
-        { onConflict: "user_id" },
-      );
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
 
-      if (upsertError) {
-        setError("Could not save partner details.");
+      if (!response.ok) {
+        setError((json as { error?: string }).error ?? "Could not save partner details.");
         return;
       }
 

@@ -25,11 +25,13 @@ export async function PUT(
 ) {
   const req = request as unknown as NextRequest;
   const body = await request.json();
-  const { title, details, type, tags } = body as {
-    title: string;
+  const { title, details, type, tags, liked, pinned } = body as {
+    title?: string;
     details?: string | null;
-    type: MemoryType;
+    type?: MemoryType;
     tags?: string[] | null;
+    liked?: boolean;
+    pinned?: boolean;
   };
 
   const id = (context as { params?: { id?: string } }).params?.id;
@@ -48,35 +50,64 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!title?.trim()) {
-    return NextResponse.json({ error: "Title is required" }, { status: 400 });
-  }
-
   const partnerId = await getPartnerIdOrThrow(supabaseAuth, user.id);
   if (!partnerId) {
     return NextResponse.json({ error: "Partner not found" }, { status: 404 });
   }
-
-  const trimmedTitle = title.trim();
-  const trimmedDetails = typeof details === "string" ? details.trim() : null;
-  const content = trimmedDetails || trimmedTitle;
 
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
+  const updates: Record<string, unknown> = {};
+
+  const hasTitle = typeof title === "string";
+  const hasDetails = details !== undefined;
+
+  if (hasTitle) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      return NextResponse.json({ error: "Title cannot be empty" }, { status: 400 });
+    }
+    updates.title = trimmedTitle;
+  }
+
+  if (hasDetails || hasTitle) {
+    const trimmedDetails = typeof details === "string" ? details.trim() : null;
+    const contentCandidate =
+      trimmedDetails || (typeof updates.title === "string" ? updates.title : null);
+    if (contentCandidate) {
+      updates.content = contentCandidate;
+    }
+  }
+
+  if (type) {
+    updates.type = type;
+  }
+
+  if (tags !== undefined) {
+    updates.tags = tags ?? null;
+  }
+
+  if (typeof liked === "boolean") {
+    updates.liked = liked;
+  }
+
+  if (typeof pinned === "boolean") {
+    updates.pinned = pinned;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+  }
+
   const update = await supabaseAdmin
     .from("memories")
-    .update({
-      title: trimmedTitle,
-      content,
-      type,
-      tags: tags ?? null,
-    })
+    .update(updates)
     .eq("id", id)
     .eq("partner_id", partnerId)
-    .select("id, title, content, type, tags, created_at")
+    .select("id, title, content, type, tags, liked, pinned, created_at")
     .maybeSingle();
 
   if (update.error) {

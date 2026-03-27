@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Calendar, Gift, Mic, MoreVertical, Plus, Trash2, Type, X } from "lucide-react";
+import { Camera, Calendar, Gift, Heart, Mic, MoreVertical, Pin, Plus, Trash2, Type, X } from "lucide-react";
 import { formatDate } from "@/lib/formatDate";
 
 type Memory = {
@@ -11,6 +11,8 @@ type Memory = {
   content: string;
   type: string;
   tags: string[] | null;
+  liked: boolean | null;
+  pinned: boolean | null;
   created_at: string | null;
 };
 
@@ -54,6 +56,7 @@ const PRESET_TAGS = [
 type MemoryType = "text" | "voice" | "photo" | "gift" | "occasion";
 type PresetTag = (typeof PRESET_TAGS)[number];
 type MemoryFilter = "all" | MemoryType;
+type SortOption = "newest" | "oldest" | "random";
 
 const FILTER_OPTIONS: Array<{ value: MemoryFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -90,6 +93,8 @@ export default function MemoryListClient({
   const [detailDeleteConfirm, setDetailDeleteConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<MemoryFilter>("all");
+  const [activeMoodFilter, setActiveMoodFilter] = useState<PresetTag | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
 
   const longPressTimer = useRef<number | null>(null);
 
@@ -102,16 +107,45 @@ export default function MemoryListClient({
 
   const filteredMemories = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return memories.filter((memory) => {
+    const filtered = memories.filter((memory) => {
       const matchesType = activeFilter === "all" ? true : memory.type === activeFilter;
       if (!matchesType) return false;
+      const matchesMood = activeMoodFilter ? (memory.tags ?? []).includes(activeMoodFilter) : true;
+      if (!matchesMood) return false;
       if (!query) return true;
 
       const title = (memory.title ?? "").toLowerCase();
       const content = memory.content.toLowerCase();
       return title.includes(query) || content.includes(query);
     });
-  }, [memories, searchQuery, activeFilter]);
+
+    const pinned = filtered.filter((memory) => Boolean(memory.pinned));
+    const others = filtered.filter((memory) => !memory.pinned);
+
+    const sortByCreatedAt = (items: Memory[], direction: "asc" | "desc") =>
+      [...items].sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return direction === "asc" ? aTime - bTime : bTime - aTime;
+      });
+
+    const randomize = (items: Memory[]) => {
+      const shuffled = [...items];
+      for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+      }
+      return shuffled;
+    };
+
+    const sortList = (items: Memory[]) => {
+      if (sortBy === "oldest") return sortByCreatedAt(items, "asc");
+      if (sortBy === "random") return randomize(items);
+      return sortByCreatedAt(items, "desc");
+    };
+
+    return [...sortList(pinned), ...sortList(others)];
+  }, [memories, searchQuery, activeFilter, activeMoodFilter, sortBy]);
 
   function clearSelection() {
     setSelectionMode(false);
@@ -234,6 +268,40 @@ export default function MemoryListClient({
     setDetailMemory(null);
   }
 
+  async function patchMemory(id: string, updates: Partial<Pick<Memory, "liked" | "pinned">>) {
+    const res = await fetch(`/api/memories/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error("Memory update failed:", res.status, json);
+      return false;
+    }
+    return true;
+  }
+
+  async function toggleLike(memory: Memory) {
+    const nextLiked = !Boolean(memory.liked);
+    const ok = await patchMemory(memory.id, { liked: nextLiked });
+    if (!ok) return;
+    setMemories((prev) =>
+      prev.map((item) => (item.id === memory.id ? { ...item, liked: nextLiked } : item)),
+    );
+    setDetailMemory((prev) => (prev?.id === memory.id ? { ...prev, liked: nextLiked } : prev));
+  }
+
+  async function togglePin(memory: Memory) {
+    const nextPinned = !Boolean(memory.pinned);
+    const ok = await patchMemory(memory.id, { pinned: nextPinned });
+    if (!ok) return;
+    setMemories((prev) =>
+      prev.map((item) => (item.id === memory.id ? { ...item, pinned: nextPinned } : item)),
+    );
+    setDetailMemory((prev) => (prev?.id === memory.id ? { ...prev, pinned: nextPinned } : prev));
+  }
+
   return (
     <section>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -256,18 +324,35 @@ export default function MemoryListClient({
       </div>
 
       <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search memories..."
-          style={{
-            border: "1px solid rgba(0,0,0,0.12)",
-            borderRadius: 10,
-            padding: "10px 12px",
-            fontSize: 14,
-          }}
-        />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search memories..."
+            style={{
+              border: "1px solid rgba(0,0,0,0.12)",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 14,
+            }}
+          />
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as SortOption)}
+            style={{
+              border: "1px solid rgba(0,0,0,0.12)",
+              borderRadius: 10,
+              padding: "10px 10px",
+              fontSize: 13,
+              background: "white",
+            }}
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="random">Random</option>
+          </select>
+        </div>
 
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
           {FILTER_OPTIONS.map((option) => {
@@ -288,6 +373,30 @@ export default function MemoryListClient({
                 }}
               >
                 {option.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+          {PRESET_TAGS.map((tag) => {
+            const active = activeMoodFilter === tag;
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setActiveMoodFilter((prev) => (prev === tag ? null : tag))}
+                style={{
+                  border: active ? "1px solid black" : "1px solid rgba(0,0,0,0.12)",
+                  background: active ? "black" : "white",
+                  color: active ? "white" : "black",
+                  borderRadius: 999,
+                  padding: "5px 10px",
+                  whiteSpace: "nowrap",
+                  fontSize: 12,
+                }}
+              >
+                {tag}
               </button>
             );
           })}
@@ -351,9 +460,28 @@ export default function MemoryListClient({
 
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <strong>{title}</strong>
-                  <span style={{ fontSize: 12, opacity: 0.75 }}>
-                    {created}
-                  </span>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        await toggleLike(memory);
+                      }}
+                      aria-label={memory.liked ? "Unlike memory" : "Like memory"}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: memory.liked ? "rgb(220 38 38)" : "rgba(0,0,0,0.65)",
+                        padding: 0,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Heart size={16} fill={memory.liked ? "currentColor" : "none"} />
+                    </button>
+                    <span style={{ fontSize: 12, opacity: 0.75 }}>{created}</span>
+                  </div>
                 </div>
                 <p style={{ fontSize: 14, opacity: 0.8, marginTop: 6 }}>
                   {memory.content}
@@ -658,6 +786,22 @@ export default function MemoryListClient({
                 {detailMemory.title ?? detailMemory.content}
               </h3>
               <div style={{ position: "relative", display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await togglePin(detailMemory);
+                  }}
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.15)",
+                    borderRadius: 8,
+                    padding: 6,
+                    color: detailMemory.pinned ? "rgb(37 99 235)" : "inherit",
+                    background: "white",
+                  }}
+                  aria-label={detailMemory.pinned ? "Unpin memory" : "Pin memory"}
+                >
+                  <Pin size={16} fill={detailMemory.pinned ? "currentColor" : "none"} />
+                </button>
                 <button
                   type="button"
                   onClick={() => setDetailMenuOpen((prev) => !prev)}
