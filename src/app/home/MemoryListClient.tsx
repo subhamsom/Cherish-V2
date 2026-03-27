@@ -52,6 +52,16 @@ const PRESET_TAGS = [
 
 type MemoryType = "text" | "voice" | "photo" | "gift" | "occasion";
 type PresetTag = (typeof PRESET_TAGS)[number];
+type MemoryFilter = "all" | MemoryType;
+
+const FILTER_OPTIONS: Array<{ value: MemoryFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "text", label: "Text" },
+  { value: "voice", label: "Voice" },
+  { value: "photo", label: "Photo" },
+  { value: "gift", label: "Gift" },
+  { value: "occasion", label: "Occasion" },
+];
 
 export default function MemoryListClient({
   initialMemories,
@@ -71,8 +81,11 @@ export default function MemoryListClient({
   const [addDetails, setAddDetails] = useState("");
   const [addType, setAddType] = useState<MemoryType>("text");
   const [addTags, setAddTags] = useState<PresetTag[]>([]);
+  const [customTagsInput, setCustomTagsInput] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<MemoryFilter>("all");
 
   const longPressTimer = useRef<number | null>(null);
 
@@ -82,6 +95,19 @@ export default function MemoryListClient({
     () => Array.from(selectedIds),
     [selectedIds],
   );
+
+  const filteredMemories = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return memories.filter((memory) => {
+      const matchesType = activeFilter === "all" ? true : memory.type === activeFilter;
+      if (!matchesType) return false;
+      if (!query) return true;
+
+      const title = (memory.title ?? "").toLowerCase();
+      const content = memory.content.toLowerCase();
+      return title.includes(query) || content.includes(query);
+    });
+  }, [memories, searchQuery, activeFilter]);
 
   function clearSelection() {
     setSelectionMode(false);
@@ -144,6 +170,13 @@ export default function MemoryListClient({
     setAddTags((prev) => (prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]));
   }
 
+  function parseCustomTags(value: string) {
+    return value
+      .split(",")
+      .map((part) => part.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
   async function createMemory() {
     setAddError(null);
     const trimmedTitle = addTitle.trim();
@@ -155,6 +188,10 @@ export default function MemoryListClient({
 
     setAddSubmitting(true);
     try {
+      const mergedTags = Array.from(
+        new Set([...addTags, ...parseCustomTags(customTagsInput)]),
+      );
+
       const res = await fetch("/api/memories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,7 +199,7 @@ export default function MemoryListClient({
           title: trimmedTitle,
           details: trimmedDetails || null,
           type: addType,
-          tags: addTags.length ? addTags : null,
+          tags: mergedTags.length ? mergedTags : null,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -175,6 +212,7 @@ export default function MemoryListClient({
       setAddDetails("");
       setAddType("text");
       setAddTags([]);
+      setCustomTagsInput("");
       router.refresh();
     } finally {
       setAddSubmitting(false);
@@ -202,11 +240,52 @@ export default function MemoryListClient({
         </button>
       </div>
 
+      <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search memories..."
+          style={{
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 10,
+            padding: "10px 12px",
+            fontSize: 14,
+          }}
+        />
+
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+          {FILTER_OPTIONS.map((option) => {
+            const active = activeFilter === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setActiveFilter(option.value)}
+                style={{
+                  border: active ? "1px solid black" : "1px solid rgba(0,0,0,0.12)",
+                  background: active ? "black" : "white",
+                  color: active ? "white" : "black",
+                  borderRadius: 999,
+                  padding: "6px 12px",
+                  whiteSpace: "nowrap",
+                  fontSize: 13,
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {!memories?.length ? (
         <p>No memories yet. Add your first one.</p>
+      ) : !filteredMemories.length ? (
+        <p style={{ marginTop: 12 }}>No memories found</p>
       ) : (
         <div style={{ display: "grid", gap: 12 }}>
-          {memories.map((memory) => {
+          {filteredMemories.map((memory) => {
             const selected = selectedIds.has(memory.id);
             const title = memory.title ?? memory.content;
             const created = memory.created_at ? formatDate(memory.created_at) : "";
@@ -419,7 +498,17 @@ export default function MemoryListClient({
                 />
               </label>
 
-              <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  overflowX: "auto",
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  borderRadius: 12,
+                  background: "rgba(0,0,0,0.03)",
+                  padding: 4,
+                }}
+              >
                 {(Object.keys(TYPE_META) as MemoryType[]).map((key) => {
                   const active = addType === key;
                   const Icon = TYPE_META[key].Icon;
@@ -429,15 +518,18 @@ export default function MemoryListClient({
                       type="button"
                       onClick={() => setAddType(key)}
                       style={{
-                        border: active ? "1px solid black" : "1px solid rgba(0,0,0,0.12)",
-                        background: active ? "black" : "white",
+                        border: "none",
+                        background: active ? "black" : "transparent",
                         color: active ? "white" : "black",
-                        borderRadius: 10,
+                        borderRadius: 9,
                         padding: "8px 10px",
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 6,
                         whiteSpace: "nowrap",
+                        boxShadow: active ? "0 1px 2px rgba(0,0,0,0.2)" : "none",
+                        fontSize: 13,
+                        fontWeight: 600,
                       }}
                     >
                       <Icon size={14} />
@@ -456,11 +548,13 @@ export default function MemoryListClient({
                       type="button"
                       onClick={() => toggleAddTag(tag)}
                       style={{
-                        border: active ? "1px solid black" : "1px solid rgba(0,0,0,0.12)",
-                        background: active ? "black" : "white",
-                        color: active ? "white" : "black",
+                        border: active ? "1px solid rgba(0,0,0,0.25)" : "1px solid rgba(0,0,0,0.10)",
+                        background: active ? "rgba(0,0,0,0.10)" : "rgba(0,0,0,0.02)",
+                        color: "black",
                         borderRadius: 999,
-                        padding: "6px 10px",
+                        padding: "4px 9px",
+                        fontSize: 12,
+                        lineHeight: 1.2,
                       }}
                     >
                       {tag}
@@ -468,6 +562,21 @@ export default function MemoryListClient({
                   );
                 })}
               </div>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 13, opacity: 0.75 }}>Custom tags</span>
+                <input
+                  value={customTagsInput}
+                  onChange={(event) => setCustomTagsInput(event.target.value)}
+                  placeholder="Add your own tags, comma separated"
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    borderRadius: 10,
+                    padding: "9px 11px",
+                    fontSize: 13,
+                  }}
+                />
+              </label>
             </div>
 
             {addError ? <p style={{ color: "rgb(220, 38, 38)", marginTop: 10 }}>{addError}</p> : null}
