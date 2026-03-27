@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Calendar, Pencil, User, X } from "lucide-react";
+import { Calendar, Camera, Loader2, Pencil, X } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 
 type Partner = {
@@ -26,13 +26,15 @@ export default function ProfileClient({
 
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(partner?.name ?? "");
-  const [photoUrl, setPhotoUrl] = useState(partner?.photo_url ?? "");
   const [relationshipStartDate, setRelationshipStartDate] = useState(
     partner?.relationship_start_date ?? "",
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,7 +53,7 @@ export default function ProfileClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: trimmedName,
-          photo_url: photoUrl.trim() || null,
+          photo_url: partner?.photo_url ?? null,
           relationship_start_date: relationshipStartDate || null,
         }),
       });
@@ -66,6 +68,37 @@ export default function ProfileClient({
       router.refresh();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePartnerPhotoSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !partner?.id) return;
+
+    setPhotoUploadError(null);
+    setPhotoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`/api/partners/${partner.id}/photo`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        details?: string;
+        photo_url?: string;
+      };
+
+      if (!response.ok) {
+        setPhotoUploadError(json.details ?? json.error ?? "Could not upload photo.");
+        return;
+      }
+
+      router.refresh();
+    } finally {
+      setPhotoUploading(false);
     }
   }
 
@@ -96,23 +129,62 @@ export default function ProfileClient({
         </div>
 
         <div className="mt-5 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            className="hidden"
+            onChange={handlePartnerPhotoSelected}
+          />
+
           <div className="flex items-center gap-3">
-            {partner?.photo_url ? (
-              <Image
-                src={partner.photo_url}
-                alt={`${partner.name} photo`}
-                width={56}
-                height={56}
-                className="h-14 w-14 rounded-full object-cover"
-              />
-            ) : (
-              <div className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-zinc-200 dark:border-zinc-700">
-                <User size={20} />
-              </div>
-            )}
-            <div>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                disabled={!partner?.id || photoUploading}
+                onClick={() => photoInputRef.current?.click()}
+                className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-50 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900"
+                aria-label={partner?.photo_url ? "Replace partner photo" : "Add partner photo"}
+              >
+                {partner?.photo_url ? (
+                  <Image
+                    src={partner.photo_url}
+                    alt={`${partner.name} photo`}
+                    width={56}
+                    height={56}
+                    unoptimized
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Camera className="text-zinc-500 dark:text-zinc-400" size={22} />
+                )}
+                {photoUploading ? (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45"
+                    aria-live="polite"
+                  >
+                    <Loader2 className="size-6 animate-spin text-white" aria-hidden />
+                  </div>
+                ) : null}
+              </button>
+              {partner?.photo_url && !photoUploading ? (
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="absolute -bottom-0.5 -right-0.5 flex size-7 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm dark:border-zinc-600 dark:bg-zinc-900"
+                  aria-label="Replace partner photo"
+                >
+                  <Camera size={14} className="text-zinc-700 dark:text-zinc-200" />
+                </button>
+              ) : null}
+            </div>
+            <div className="min-w-0">
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Partner</p>
               <p className="font-medium">{partner?.name ?? "Not set yet"}</p>
+              {photoUploadError ? (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{photoUploadError}</p>
+              ) : null}
             </div>
           </div>
 
@@ -166,15 +238,9 @@ export default function ProfileClient({
                 />
               </label>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm">Photo URL (optional)</span>
-                <input
-                  value={photoUrl}
-                  onChange={(event) => setPhotoUrl(event.target.value)}
-                  placeholder="https://..."
-                  className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
-                />
-              </label>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Profile photo: use the camera button on the card above (uploads immediately).
+              </p>
 
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm">Relationship start date (optional)</span>

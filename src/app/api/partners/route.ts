@@ -36,13 +36,26 @@ export async function PUT(req: NextRequest) {
   }
 
   const supabaseAdmin = createServiceRoleClient();
+
+  let resolvedPhotoUrl: string | null | undefined = photo_url;
+  if (resolvedPhotoUrl === undefined) {
+    const existing = await supabaseAdmin
+      .from("partners")
+      .select("photo_url")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    resolvedPhotoUrl = existing.data?.photo_url ?? null;
+  } else {
+    resolvedPhotoUrl = resolvedPhotoUrl ?? null;
+  }
+
   const upsertPartner = await supabaseAdmin
     .from("partners")
     .upsert(
       {
         user_id: user.id,
         name: trimmedName,
-        photo_url: photo_url ?? null,
+        photo_url: resolvedPhotoUrl,
         relationship_start_date: relationship_start_date ?? null,
         bio: bio ?? null,
       },
