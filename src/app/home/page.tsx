@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
 import MemoryListClient from "./MemoryListClient";
@@ -135,10 +134,6 @@ export default async function HomePage() {
           <button type="submit">Sign out</button>
         </form>
       </header>
-
-      <section>
-        <Link href="/memories/new">Add Memory</Link>
-      </section>
 
       <MemoryListClient initialMemories={memories ?? []} />
     </main>

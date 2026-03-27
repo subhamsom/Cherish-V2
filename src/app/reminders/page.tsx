@@ -1,23 +1,22 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
+import { useEffect, useState, type FormEvent } from "react";
 import { formatDate } from "@/lib/formatDate";
 import {
   Calendar,
   Check,
-  ChevronDown,
-  ChevronUp,
   List,
   MoreVertical,
   Plus,
   Trash2,
   Pencil,
+  X,
 } from "lucide-react";
 
 type Reminder = {
   id: string;
+  user_id: string;
+  partner_id: string;
   title: string;
   date: string;
   note: string | null;
@@ -32,6 +31,24 @@ type CalendarCell = {
   inCurrentMonth: boolean;
   dateKey: string;
 };
+
+type ReminderFilter = "all" | "due" | "upcoming" | "past";
+type ReminderFormMode = "create" | "edit";
+
+const FILTERS: Array<{ id: ReminderFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "due", label: "Due" },
+  { id: "upcoming", label: "Upcoming" },
+  { id: "past", label: "Past" },
+];
+
+const RECURRENCE_OPTIONS: Array<NonNullable<Reminder["recurrence"]>> = [
+  "none",
+  "daily",
+  "weekly",
+  "monthly",
+  "yearly",
+];
 
 function toDateKey(date: Date) {
   const year = date.getUTCFullYear();
@@ -72,91 +89,239 @@ function buildCalendarGrid(month: Date): CalendarCell[] {
   return cells;
 }
 
-function ReminderCard({
+function parseTagsInput(value: string) {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((tag) => tag.toLowerCase())
+    .filter((tag, index, arr) => arr.indexOf(tag) === index);
+}
+
+function recurrenceLabel(recurrence: Reminder["recurrence"]) {
+  if (!recurrence || recurrence === "none") return "Recurring";
+  return `${recurrence[0].toUpperCase()}${recurrence.slice(1)}`;
+}
+
+function notePreview(note: string | null, maxChars = 110) {
+  if (!note) return null;
+  const collapsed = note.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= maxChars) return collapsed;
+  return `${collapsed.slice(0, maxChars)}...`;
+}
+
+function reminderStatus(reminder: Reminder, todayKey: string): "due" | "upcoming" | "past" {
+  if (reminder.completed) return "past";
+  if (reminder.date <= todayKey) return "due";
+  return "upcoming";
+}
+
+function ReminderFormModal({
+  mode,
   reminder,
-  onToggleDone,
-  onDelete,
+  open,
+  submitting,
+  onClose,
+  onSubmit,
 }: {
-  reminder: Reminder;
-  onToggleDone: (id: string, done: boolean) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
+  mode: ReminderFormMode;
+  reminder: Reminder | null;
+  open: boolean;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (payload: {
+    title: string;
+    date: string;
+    note: string;
+    tags: string[];
+    recurrence: NonNullable<Reminder["recurrence"]>;
+  }) => Promise<void>;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState("");
+  const [note, setNote] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
+  const [recurrence, setRecurrence] = useState<NonNullable<Reminder["recurrence"]>>("none");
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleDone() {
-    setBusy(true);
-    try {
-      await onToggleDone(reminder.id, Boolean(reminder.completed));
-    } finally {
-      setBusy(false);
+  useEffect(() => {
+    if (!open) return;
+    setError(null);
+    if (mode === "edit" && reminder) {
+      setTitle(reminder.title);
+      setDate(reminder.date);
+      setNote(reminder.note ?? "");
+      setTagsInput((reminder.tags ?? []).join(", "));
+      setRecurrence(reminder.recurrence ?? "none");
+      return;
     }
-  }
+    setTitle("");
+    setDate("");
+    setNote("");
+    setTagsInput("");
+    setRecurrence("none");
+  }, [open, mode, reminder]);
 
-  async function handleDelete() {
-    setBusy(true);
-    try {
-      await onDelete(reminder.id);
-    } finally {
-      setBusy(false);
+  if (!open) return null;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setError("Title is required.");
+      return;
     }
+    if (!date) {
+      setError("Date is required.");
+      return;
+    }
+
+    await onSubmit({
+      title: trimmedTitle,
+      date,
+      note: note.trim(),
+      tags: parseTagsInput(tagsInput),
+      recurrence,
+    });
   }
 
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <div className="fixed inset-0 z-40 bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="mx-auto mt-6 w-full max-w-xl rounded-2xl bg-white p-4 dark:bg-zinc-950 max-h-[92vh] overflow-y-auto"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{mode === "create" ? "Add Reminder" : "Edit Reminder"}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg border p-1.5">
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm">Title</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="e.g. Mansi's birthday"
+              className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm">Date</span>
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm">Note (optional)</span>
+            <textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Any details worth remembering..."
+              className="min-h-24 rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm">Tags (optional)</span>
+            <input
+              value={tagsInput}
+              onChange={(event) => setTagsInput(event.target.value)}
+              placeholder="e.g. birthday, gift, plan ahead"
+              className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+            />
+          </label>
+
+          <div>
+            <p className="text-sm">Recurring</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {RECURRENCE_OPTIONS.map((option) => {
+                const active = recurrence === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setRecurrence(option)}
+                    className={[
+                      "rounded-full border px-3 py-1.5 text-sm",
+                      active
+                        ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                        : "border-zinc-200 dark:border-zinc-800",
+                    ].join(" ")}
+                  >
+                    {option[0].toUpperCase()}
+                    {option.slice(1)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-xl bg-black px-4 py-2.5 text-white disabled:opacity-60 dark:bg-white dark:text-black"
+            >
+              {submitting ? "Saving..." : mode === "create" ? "Save reminder" : "Save changes"}
+            </button>
+            <button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ReminderCard({
+  reminder,
+  onOpenDetails,
+  todayKey,
+}: {
+  reminder: Reminder;
+  onOpenDetails: (reminder: Reminder) => void;
+  todayKey: string;
+}) {
+  const status = reminderStatus(reminder, todayKey);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenDetails(reminder)}
+      className="w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white p-3 text-left dark:border-zinc-800 dark:bg-zinc-950"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium">{reminder.title}</h3>
           <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{formatDate(reminder.date)}</p>
+          {reminder.note ? <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400 truncate">{notePreview(reminder.note)}</p> : null}
         </div>
-        <div className="relative flex items-center gap-1">
-          <button
-            type="button"
-            onClick={handleDone}
-            disabled={busy}
-            aria-label={reminder.completed ? "Mark as not done" : "Mark as done"}
-            className={[
-              "rounded-lg border p-2 transition-colors",
-              reminder.completed
-                ? "border-emerald-600 bg-emerald-600 text-white"
-                : "border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300",
-            ].join(" ")}
-          >
-            <Check size={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setMenuOpen((prev) => !prev)}
-            aria-label="Reminder options"
-            className="rounded-lg border border-zinc-300 p-2 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
-          >
-            <MoreVertical size={16} />
-          </button>
-
-          {menuOpen ? (
-            <div className="absolute right-0 top-10 z-10 min-w-36 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <Link
-                href={`/reminders/${reminder.id}/edit`}
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <Pencil size={14} />
-                Edit
-              </Link>
-              <button
-                type="button"
-                onClick={async () => {
-                  setMenuOpen(false);
-                  await handleDelete();
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-              >
-                <Trash2 size={14} />
-                Delete
-              </button>
-            </div>
-          ) : null}
-        </div>
+        <span
+          className={[
+            "rounded-full px-2 py-0.5 text-xs",
+            status === "due"
+              ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+              : status === "upcoming"
+                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+          ].join(" ")}
+        >
+          {status[0].toUpperCase()}
+          {status.slice(1)}
+        </span>
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -171,138 +336,59 @@ function ReminderCard({
 
         {((reminder.recurrence && reminder.recurrence !== "none") || reminder.recurring) ? (
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
-            {!reminder.recurrence || reminder.recurrence === "none"
-              ? "Recurring"
-              : `${reminder.recurrence[0].toUpperCase()}${reminder.recurrence.slice(1)}`}
+            {recurrenceLabel(reminder.recurrence)}
           </span>
         ) : null}
       </div>
-    </article>
-  );
-}
-
-function ReminderSection({
-  title,
-  reminders,
-  collapsed,
-  onToggle,
-  onToggleDone,
-  onDelete,
-}: {
-  title: string;
-  reminders: Reminder[];
-  collapsed: boolean;
-  onToggle: () => void;
-  onToggleDone: (id: string, done: boolean) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-}) {
-  return (
-    <section className="mt-5">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between rounded-xl border border-zinc-200 px-3 py-2 text-left dark:border-zinc-800"
-      >
-        <span className="font-medium">
-          {title} ({reminders.length})
-        </span>
-        {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-      </button>
-
-      {!collapsed ? (
-        reminders.length ? (
-          <div className="mt-3 grid gap-2">
-            {reminders.map((reminder) => (
-              <ReminderCard
-                key={reminder.id}
-                reminder={reminder}
-                onToggleDone={onToggleDone}
-                onDelete={onDelete}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">No reminders here.</p>
-        )
-      ) : null}
-    </section>
+    </button>
   );
 }
 
 export default function RemindersPage() {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [view, setView] = useState<"list" | "calendar">("list");
-  const [showPast, setShowPast] = useState(false);
-  const [collapse, setCollapse] = useState({ due: false, upcoming: false, past: false });
+  const [activeFilter, setActiveFilter] = useState<ReminderFilter>("all");
   const [month, setMonth] = useState(startOfMonthUTC(new Date()));
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [detailReminder, setDetailReminder] = useState<Reminder | null>(null);
+  const [detailMenuOpen, setDetailMenuOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<ReminderFormMode>("create");
+  const [formSubmitting, setFormSubmitting] = useState(false);
+
+  async function loadReminders() {
+    setLoading(true);
+    setError(null);
+    const response = await fetch("/api/reminders");
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError("Could not load reminders.");
+      setLoading(false);
+      return;
+    }
+    setReminders((json.reminders as Reminder[]) ?? []);
+    setLoading(false);
+  }
 
   useEffect(() => {
-    let cancelled = false;
+    void loadReminders();
+  }, []);
 
-    async function loadReminders() {
-      setLoading(true);
-      setError(null);
-
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (cancelled) return;
-
-      if (authError || !user) {
-        setError("You must be signed in.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: partner, error: partnerError } = await supabase
-        .from("partners")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      if (partnerError || !partner) {
-        setError("Could not load partner data. Complete onboarding first.");
-        setLoading(false);
-        return;
-      }
-
-      const { data, error: remindersError } = await supabase
-        .from("reminders")
-        .select("id, title, date, note, tags, recurrence, recurring, completed")
-        .eq("partner_id", partner.id)
-        .order("date", { ascending: true });
-
-      if (cancelled) return;
-
-      if (remindersError) {
-        setError("Could not load reminders.");
-        setLoading(false);
-        return;
-      }
-
-      setReminders(data ?? []);
-      setLoading(false);
+  useEffect(() => {
+    if (!detailReminder) {
+      setDetailMenuOpen(false);
     }
-
-    loadReminders();
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase]);
+  }, [detailReminder]);
 
   const todayKey = toDateKey(new Date());
 
-  const due = reminders.filter((reminder) => !reminder.completed && reminder.date <= todayKey);
-  const upcoming = reminders.filter((reminder) => !reminder.completed && reminder.date > todayKey);
-  const past = reminders.filter((reminder) => Boolean(reminder.completed));
+  const filteredReminders = reminders.filter((reminder) => {
+    const status = reminderStatus(reminder, todayKey);
+    if (activeFilter === "all") return true;
+    return status === activeFilter;
+  });
 
   const remindersByDate = reminders.reduce<Record<string, Reminder[]>>((acc, reminder) => {
     const key = reminder.date;
@@ -316,23 +402,60 @@ export default function RemindersPage() {
   const calendarCells = buildCalendarGrid(month);
   const selectedDateReminders = selectedDateKey ? (remindersByDate[selectedDateKey] ?? []) : [];
 
-  async function toggleDone(id: string, done: boolean) {
-    const { error: updateError } = await supabase
-      .from("reminders")
-      .update({ completed: !done })
-      .eq("id", id);
-
-    if (updateError) return;
-
+  async function toggleDone(id: string) {
+    const response = await fetch(`/api/reminders/${id}/complete`, { method: "POST" });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) return;
     setReminders((prev) =>
-      prev.map((reminder) => (reminder.id === id ? { ...reminder, completed: !done } : reminder)),
+      prev.map((reminder) =>
+        reminder.id === id ? { ...reminder, completed: Boolean(json.completed) } : reminder,
+      ),
     );
+    setDetailReminder(null);
+    setDetailMenuOpen(false);
   }
 
   async function deleteReminder(id: string) {
-    const { error: deleteError } = await supabase.from("reminders").delete().eq("id", id);
-    if (deleteError) return;
+    const confirmed = window.confirm("Delete this reminder?");
+    if (!confirmed) return;
+    const response = await fetch(`/api/reminders/${id}`, { method: "DELETE" });
+    if (!response.ok) return;
     setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+    setDetailReminder((prev) => (prev?.id === id ? null : prev));
+    setDetailMenuOpen(false);
+  }
+
+  async function submitReminderForm(payload: {
+    title: string;
+    date: string;
+    note: string;
+    tags: string[];
+    recurrence: NonNullable<Reminder["recurrence"]>;
+  }) {
+    setFormSubmitting(true);
+    try {
+      if (formMode === "create") {
+        const response = await fetch("/api/reminders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) return;
+      } else if (detailReminder) {
+        const response = await fetch(`/api/reminders/${detailReminder.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) return;
+      }
+      setFormOpen(false);
+      setDetailReminder(null);
+      setDetailMenuOpen(false);
+      await loadReminders();
+    } finally {
+      setFormSubmitting(false);
+    }
   }
 
   return (
@@ -371,13 +494,18 @@ export default function RemindersPage() {
               </button>
             </div>
 
-            <Link
-              href="/reminders/new"
+            <button
+              type="button"
+              onClick={() => {
+                setFormMode("create");
+                setFormOpen(true);
+                setDetailMenuOpen(false);
+              }}
               className="rounded-xl bg-black p-2.5 text-white dark:bg-white dark:text-black"
               aria-label="Add reminder"
             >
               <Plus size={18} />
-            </Link>
+            </button>
           </div>
         </header>
 
@@ -391,45 +519,43 @@ export default function RemindersPage() {
         ) : null}
 
         {!loading && !error && reminders.length > 0 && view === "list" ? (
-          <>
-            <ReminderSection
-              title="Due"
-              reminders={due}
-              collapsed={collapse.due}
-              onToggle={() => setCollapse((prev) => ({ ...prev, due: !prev.due }))}
-              onToggleDone={toggleDone}
-              onDelete={deleteReminder}
-            />
-            <ReminderSection
-              title="Upcoming"
-              reminders={upcoming}
-              collapsed={collapse.upcoming}
-              onToggle={() => setCollapse((prev) => ({ ...prev, upcoming: !prev.upcoming }))}
-              onToggleDone={toggleDone}
-              onDelete={deleteReminder}
-            />
-
-            <div className="mt-5">
-              <button
-                type="button"
-                onClick={() => setShowPast((prev) => !prev)}
-                className="text-sm text-zinc-600 underline dark:text-zinc-300"
-              >
-                {showPast ? "Hide past" : "Show past"}
-              </button>
+          <section className="mt-4">
+            <div className="mb-3 flex flex-wrap gap-2">
+              {FILTERS.map((filter) => {
+                const active = activeFilter === filter.id;
+                return (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    onClick={() => setActiveFilter(filter.id)}
+                    className={[
+                      "rounded-full border px-3 py-1.5 text-sm",
+                      active
+                        ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                        : "border-zinc-200 dark:border-zinc-800",
+                    ].join(" ")}
+                  >
+                    {filter.label}
+                  </button>
+                );
+              })}
             </div>
 
-            {showPast ? (
-              <ReminderSection
-                title="Past"
-                reminders={past}
-                collapsed={collapse.past}
-                onToggle={() => setCollapse((prev) => ({ ...prev, past: !prev.past }))}
-                onToggleDone={toggleDone}
-                onDelete={deleteReminder}
-              />
-            ) : null}
-          </>
+            {filteredReminders.length ? (
+              <div className="grid gap-2">
+                {filteredReminders.map((reminder) => (
+                  <ReminderCard
+                    key={reminder.id}
+                    reminder={reminder}
+                    onOpenDetails={(item) => setDetailReminder(item)}
+                    todayKey={todayKey}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">No reminders in this filter.</p>
+            )}
+          </section>
         ) : null}
 
         {!loading && !error && reminders.length > 0 && view === "calendar" ? (
@@ -470,8 +596,17 @@ export default function RemindersPage() {
 
             <div className="mt-1 grid grid-cols-7 gap-1">
               {calendarCells.map((cell) => {
-                const hasReminders = Boolean(remindersByDate[cell.dateKey]?.length);
+                const dayReminders = remindersByDate[cell.dateKey] ?? [];
+                const hasReminders = Boolean(dayReminders.length);
                 const selected = selectedDateKey === cell.dateKey;
+                const dayStatus =
+                  dayReminders.find((item) => reminderStatus(item, todayKey) === "due")
+                    ? "due"
+                    : dayReminders.find((item) => reminderStatus(item, todayKey) === "upcoming")
+                      ? "upcoming"
+                      : dayReminders.length
+                        ? "past"
+                        : null;
                 return (
                   <button
                     key={cell.dateKey}
@@ -487,37 +622,176 @@ export default function RemindersPage() {
                   >
                     <span>{cell.date.getUTCDate()}</span>
                     {hasReminders ? (
-                      <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-current" />
+                      <span
+                        className={[
+                          "mt-1 inline-block h-1.5 w-1.5 rounded-full",
+                          dayStatus === "due"
+                            ? "bg-red-500"
+                            : dayStatus === "upcoming"
+                              ? "bg-blue-500"
+                              : "bg-zinc-400",
+                        ].join(" ")}
+                      />
                     ) : null}
                   </button>
                 );
               })}
             </div>
-
-            {selectedDateKey ? (
-              <div className="mt-4 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-                <p className="text-sm font-medium">{formatDate(selectedDateKey)}</p>
-                {selectedDateReminders.length ? (
-                  <div className="mt-2 grid gap-2">
-                    {selectedDateReminders.map((reminder) => (
-                      <ReminderCard
-                        key={reminder.id}
-                        reminder={reminder}
-                        onToggleDone={toggleDone}
-                        onDelete={deleteReminder}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                    No reminders on this date.
-                  </p>
-                )}
-              </div>
-            ) : null}
           </section>
         ) : null}
       </section>
+
+      {detailReminder ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 p-4"
+          onClick={() => {
+            setDetailReminder(null);
+            setDetailMenuOpen(false);
+          }}
+        >
+          <div
+            className="mx-auto mt-6 w-full max-w-xl rounded-2xl bg-white p-4 dark:bg-zinc-950 max-h-[92vh] overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">{detailReminder.title}</h2>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">{formatDate(detailReminder.date)}</p>
+              </div>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setDetailMenuOpen((prev) => !prev)}
+                  className="rounded-lg border p-2"
+                >
+                  <MoreVertical size={16} />
+                </button>
+
+                {detailMenuOpen ? (
+                  <div className="absolute right-0 top-11 z-10 min-w-36 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailMenuOpen(false);
+                        setFormMode("edit");
+                        setFormOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      <Pencil size={14} />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setDetailMenuOpen(false);
+                        await deleteReminder(detailReminder.id);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {detailReminder.note ? (
+              <p className="mt-3 whitespace-pre-wrap break-words text-sm text-zinc-700 dark:text-zinc-300">
+                {detailReminder.note}
+              </p>
+            ) : (
+              <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">No notes added.</p>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {(detailReminder.tags ?? []).map((tag) => (
+                <span
+                  key={`${detailReminder.id}-detail-${tag}`}
+                  className="rounded-full border border-zinc-200 px-2 py-0.5 text-xs dark:border-zinc-700"
+                >
+                  {tag}
+                </span>
+              ))}
+              {((detailReminder.recurrence && detailReminder.recurrence !== "none") ||
+              detailReminder.recurring) ? (
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+                  {recurrenceLabel(detailReminder.recurrence)}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  await toggleDone(detailReminder.id);
+                }}
+                className="inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-sm"
+              >
+                <Check size={14} />
+                {detailReminder.completed ? "Mark as not done" : "Mark as done"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDetailReminder(null);
+                  setDetailMenuOpen(false);
+                }}
+                className="rounded-xl border px-3 py-2 text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <ReminderFormModal
+        mode={formMode}
+        reminder={detailReminder}
+        open={formOpen}
+        submitting={formSubmitting}
+        onClose={() => {
+          setFormOpen(false);
+          setDetailMenuOpen(false);
+        }}
+        onSubmit={submitReminderForm}
+      />
+
+      {selectedDateKey && view === "calendar" ? (
+        <div className="fixed inset-0 z-30 bg-black/20" onClick={() => setSelectedDateKey(null)}>
+          <div
+            className="fixed bottom-0 left-0 right-0 rounded-t-2xl bg-white p-4 dark:bg-zinc-950"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <p className="font-medium">{formatDate(selectedDateKey)}</p>
+              <button type="button" onClick={() => setSelectedDateKey(null)} className="rounded-lg border p-1.5">
+                <X size={16} />
+              </button>
+            </div>
+            {selectedDateReminders.length ? (
+              <div className="grid max-h-72 gap-2 overflow-y-auto">
+                {selectedDateReminders.map((reminder) => (
+                  <ReminderCard
+                    key={reminder.id}
+                    reminder={reminder}
+                    onOpenDetails={(item) => {
+                      setSelectedDateKey(null);
+                      setDetailReminder(item);
+                    }}
+                    todayKey={todayKey}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">No reminders on this date.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Calendar, Gift, Mic, Type } from "lucide-react";
+import { Camera, Calendar, Gift, Mic, Plus, Type, X } from "lucide-react";
 import { formatDate } from "@/lib/formatDate";
 
 type Memory = {
@@ -39,6 +39,20 @@ function confirmText() {
   return "Are you sure? This memory can't be recovered.";
 }
 
+const PRESET_TAGS = [
+  "happy",
+  "romantic",
+  "grateful",
+  "funny",
+  "milestone",
+  "difficult",
+  "peaceful",
+  "excited",
+] as const;
+
+type MemoryType = "text" | "voice" | "photo" | "gift" | "occasion";
+type PresetTag = (typeof PRESET_TAGS)[number];
+
 export default function MemoryListClient({
   initialMemories,
 }: {
@@ -52,6 +66,13 @@ export default function MemoryListClient({
   );
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addTitle, setAddTitle] = useState("");
+  const [addDetails, setAddDetails] = useState("");
+  const [addType, setAddType] = useState<MemoryType>("text");
+  const [addTags, setAddTags] = useState<PresetTag[]>([]);
+  const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const longPressTimer = useRef<number | null>(null);
 
@@ -119,9 +140,67 @@ export default function MemoryListClient({
     }
   }
 
+  function toggleAddTag(tag: PresetTag) {
+    setAddTags((prev) => (prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]));
+  }
+
+  async function createMemory() {
+    setAddError(null);
+    const trimmedTitle = addTitle.trim();
+    const trimmedDetails = addDetails.trim();
+    if (!trimmedTitle) {
+      setAddError("Title is required.");
+      return;
+    }
+
+    setAddSubmitting(true);
+    try {
+      const res = await fetch("/api/memories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: trimmedTitle,
+          details: trimmedDetails || null,
+          type: addType,
+          tags: addTags.length ? addTags : null,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAddError(json.error ?? "Could not save memory.");
+        return;
+      }
+      setAddOpen(false);
+      setAddTitle("");
+      setAddDetails("");
+      setAddType("text");
+      setAddTags([]);
+      router.refresh();
+    } finally {
+      setAddSubmitting(false);
+    }
+  }
+
   return (
     <section>
-      <h2>Recent Memories</h2>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <h2>Recent Memories</h2>
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 10,
+            padding: "8px 10px",
+          }}
+        >
+          <Plus size={16} />
+          Add Memory
+        </button>
+      </div>
 
       {!memories?.length ? (
         <p>No memories yet. Add your first one.</p>
@@ -285,6 +364,135 @@ export default function MemoryListClient({
               </div>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {addOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.38)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 60,
+          }}
+          onClick={() => setAddOpen(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 560,
+              background: "white",
+              borderRadius: 14,
+              padding: 16,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>Add Memory</h3>
+              <button type="button" onClick={() => setAddOpen(false)} style={{ border: "1px solid rgba(0,0,0,0.15)", borderRadius: 8, padding: 6 }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 14 }}>Title</span>
+                <input
+                  value={addTitle}
+                  onChange={(event) => setAddTitle(event.target.value)}
+                  placeholder="e.g. Our first walk in the rain"
+                  style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: "10px 12px" }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 14 }}>Details</span>
+                <textarea
+                  value={addDetails}
+                  onChange={(event) => setAddDetails(event.target.value)}
+                  placeholder="The little things worth remembering..."
+                  style={{ minHeight: 100, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: "10px 12px" }}
+                />
+              </label>
+
+              <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                {(Object.keys(TYPE_META) as MemoryType[]).map((key) => {
+                  const active = addType === key;
+                  const Icon = TYPE_META[key].Icon;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setAddType(key)}
+                      style={{
+                        border: active ? "1px solid black" : "1px solid rgba(0,0,0,0.12)",
+                        background: active ? "black" : "white",
+                        color: active ? "white" : "black",
+                        borderRadius: 10,
+                        padding: "8px 10px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <Icon size={14} />
+                      {TYPE_META[key].label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {PRESET_TAGS.map((tag) => {
+                  const active = addTags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleAddTag(tag)}
+                      style={{
+                        border: active ? "1px solid black" : "1px solid rgba(0,0,0,0.12)",
+                        background: active ? "black" : "white",
+                        color: active ? "white" : "black",
+                        borderRadius: 999,
+                        padding: "6px 10px",
+                      }}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {addError ? <p style={{ color: "rgb(220, 38, 38)", marginTop: 10 }}>{addError}</p> : null}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+              <button type="button" onClick={() => setAddOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await createMemory();
+                }}
+                disabled={addSubmitting}
+                style={{
+                  background: "black",
+                  color: "white",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                }}
+              >
+                {addSubmitting ? "Saving..." : "Save this memory"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </section>
