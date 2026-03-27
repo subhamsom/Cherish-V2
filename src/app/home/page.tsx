@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Settings } from "lucide-react";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
 import MemoryListClient from "./MemoryListClient";
 
@@ -114,27 +116,24 @@ export default async function HomePage() {
     console.timeEnd("[home] fetchMemories");
     console.error("[home] fetchMemories failed:", error);
     return (
-      <main>
-        <header>
-          <h1>Cherish</h1>
-          <p>Partner: {partner.name}</p>
-        </header>
-        <p>Could not load memories right now. Please refresh.</p>
+      <main className="p-4">
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">Could not load memories right now. Please refresh.</p>
       </main>
     );
   }
   console.timeEnd("[home] fetchMemories");
 
   return (
-    <main>
-      <header>
-        <h1>Cherish</h1>
-        <p>Partner: {partner.name}</p>
-        <form action="/auth/signout" method="post">
-          <button type="submit">Sign out</button>
-        </form>
+    <main className="p-4">
+      <header className="mb-3 flex items-center justify-end md:hidden">
+        <Link
+          href="/settings"
+          className="inline-flex rounded-lg border border-zinc-200 p-2 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+          aria-label="Settings"
+        >
+          <Settings size={16} />
+        </Link>
       </header>
-
       <MemoryListClient initialMemories={memories ?? []} />
     </main>
   );

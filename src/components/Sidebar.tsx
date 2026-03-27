@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Home, User } from "lucide-react";
+import { Bell, Home, Settings, User } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 
 type NavItem = {
   href: string;
@@ -25,18 +27,40 @@ const NAV_ITEMS: NavItem[] = [
     matches: (pathname) => pathname.startsWith("/reminders"),
   },
   {
-    href: "/profile",
-    label: "Profile",
+    href: "/partner",
+    label: "Partner",
     Icon: User,
-    matches: (pathname) => pathname.startsWith("/profile"),
+    matches: (pathname) => pathname.startsWith("/partner") || pathname.startsWith("/profile"),
   },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const [displayName, setDisplayName] = useState("You");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (cancelled || !user) return;
+      const meta = (user.user_metadata as Record<string, unknown> | null) ?? null;
+      const fullName = (meta?.full_name as string | undefined) ?? (meta?.name as string | undefined);
+      setDisplayName(fullName ?? user.email ?? "You");
+    }
+    void loadUser();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  const initial = displayName.trim().charAt(0).toUpperCase() || "Y";
 
   return (
     <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-black md:block">
+      <div className="flex h-full flex-col">
       <div className="px-6 py-6">
         <p className="text-xl font-semibold tracking-tight">Cherish</p>
       </div>
@@ -64,6 +88,24 @@ export default function Sidebar() {
           })}
         </ul>
       </nav>
+      <div className="mt-auto border-t border-zinc-200 p-3 dark:border-zinc-800">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+          <div className="min-w-0 flex items-center gap-2">
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-medium dark:bg-zinc-800">
+              {initial}
+            </div>
+            <span className="truncate text-sm">{displayName}</span>
+          </div>
+          <Link
+            href="/settings"
+            className="rounded-lg border border-zinc-200 p-1.5 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            aria-label="Settings"
+          >
+            <Settings size={16} />
+          </Link>
+        </div>
+      </div>
+      </div>
     </aside>
   );
 }

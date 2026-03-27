@@ -25,10 +25,10 @@ const NAV_ITEMS: NavItem[] = [
     matches: (pathname) => pathname.startsWith("/reminders"),
   },
   {
-    href: "/profile",
-    label: "Profile",
+    href: "/partner",
+    label: "Partner",
     Icon: User,
-    matches: (pathname) => pathname.startsWith("/profile"),
+    matches: (pathname) => pathname.startsWith("/partner") || pathname.startsWith("/profile"),
   },
 ];
 

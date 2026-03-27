@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { formatDate } from "@/lib/formatDate";
 import {
   Calendar,
@@ -10,6 +11,7 @@ import {
   Plus,
   Trash2,
   Pencil,
+  Settings,
   X,
 } from "lucide-react";
 
@@ -493,6 +495,13 @@ export default function RemindersPage() {
                 <Calendar size={16} />
               </button>
             </div>
+            <Link
+              href="/settings"
+              className="rounded-xl border border-zinc-200 p-2.5 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300 md:hidden"
+              aria-label="Settings"
+            >
+              <Settings size={18} />
+            </Link>
 
             <button
               type="button"
