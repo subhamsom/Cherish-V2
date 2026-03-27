@@ -459,7 +459,29 @@ export default function MemoryListClient({
                 ) : null}
 
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <strong>{title}</strong>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <strong>{title}</strong>
+                    {memory.pinned ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          border: "1px solid rgba(37,99,235,0.25)",
+                          background: "rgba(37,99,235,0.08)",
+                          color: "rgb(37 99 235)",
+                          borderRadius: 999,
+                          padding: "2px 8px",
+                          fontSize: 11,
+                          lineHeight: 1.2,
+                        }}
+                        aria-label="Pinned memory"
+                      >
+                        <Pin size={12} fill="currentColor" />
+                        Pinned
+                      </span>
+                    ) : null}
+                  </div>
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
                     <button
                       type="button"
