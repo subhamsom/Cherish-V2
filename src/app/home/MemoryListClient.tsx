@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Camera, Calendar, Gift, Heart, Mic, MoreVertical, Pin, Plus, Trash2, Type, X } from "lucide-react";
 import { formatDate } from "@/lib/formatDate";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
@@ -15,6 +16,7 @@ type Memory = {
   liked: boolean | null;
   pinned: boolean | null;
   audio_url: string | null;
+  image_url: string | null;
   created_at: string | null;
 };
 
@@ -60,6 +62,7 @@ type PresetTag = (typeof PRESET_TAGS)[number];
 type MemoryFilter = "all" | MemoryType;
 type SortOption = "newest" | "oldest" | "random";
 const MAX_VOICE_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_FILE_BYTES = 20 * 1024 * 1024;
 
 const FILTER_OPTIONS: Array<{ value: MemoryFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -97,9 +100,15 @@ export default function MemoryListClient({
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [recordedAudioPreviewUrl, setRecordedAudioPreviewUrl] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [detailMemory, setDetailMemory] = useState<Memory | null>(null);
   const [detailAudioPlaybackUrl, setDetailAudioPlaybackUrl] = useState<string | null>(null);
   const [detailAudioError, setDetailAudioError] = useState<string | null>(null);
+  const [detailImagePlaybackUrl, setDetailImagePlaybackUrl] = useState<string | null>(null);
+  const [detailImageError, setDetailImageError] = useState<string | null>(null);
+  const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [detailDeleteConfirm, setDetailDeleteConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -322,6 +331,37 @@ export default function MemoryListClient({
     setRecordingError(null);
   }
 
+  function clearPhotoSelection() {
+    setPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPhotoFile(null);
+    setPhotoError(null);
+  }
+
+  function onPhotoFileChange(file: File | null) {
+    setPhotoError(null);
+    if (!file) {
+      clearPhotoSelection();
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Please select a valid image file.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_FILE_BYTES) {
+      setPhotoError("Image is too large. Please keep it under 20MB.");
+      return;
+    }
+    setPhotoFile(file);
+    const nextPreview = URL.createObjectURL(file);
+    setPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return nextPreview;
+    });
+  }
+
   async function createMemory() {
     setAddError(null);
     const trimmedTitle = addTitle.trim();
@@ -332,6 +372,10 @@ export default function MemoryListClient({
     }
     if (addType === "voice" && !recordedAudioBlob) {
       setAddError("Please record your voice memory before saving.");
+      return;
+    }
+    if (addType === "photo" && !photoFile) {
+      setAddError("Please choose an image for your photo memory.");
       return;
     }
     if (addType === "voice" && recordingBusy) {
@@ -415,6 +459,38 @@ export default function MemoryListClient({
         }
       }
 
+      if (addType === "photo" && photoFile && createdMemoryId) {
+        const uploadForm = new FormData();
+        uploadForm.append("file", photoFile);
+        uploadForm.append("type", "memory");
+        uploadForm.append("memory_id", createdMemoryId);
+        const uploadRes = await fetch("/api/media/upload", {
+          method: "POST",
+          body: uploadForm,
+        });
+        const uploadJson = await uploadRes.json().catch(() => ({}));
+
+        if (!uploadRes.ok || !uploadJson.path) {
+          await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
+          setAddError(
+            `Image upload failed: ${uploadJson.details ?? uploadJson.error ?? "Unknown upload error"}`,
+          );
+          return;
+        }
+        const imagePath = uploadJson.path as string;
+        const patch = await fetch(`/api/memories/${createdMemoryId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_url: imagePath }),
+        });
+
+        if (!patch.ok) {
+          await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
+          setAddError("Image uploaded, but saving the memory reference failed.");
+          return;
+        }
+      }
+
       setAddOpen(false);
       setAddTitle("");
       setAddDetails("");
@@ -422,6 +498,7 @@ export default function MemoryListClient({
       setAddTags([]);
       setCustomTagsInput("");
       clearVoiceRecording();
+      clearPhotoSelection();
       router.refresh();
     } finally {
       setAddSubmitting(false);
@@ -508,6 +585,34 @@ export default function MemoryListClient({
   }, [detailMemory?.audio_url, supabase]);
 
   useEffect(() => {
+    if (!detailMemory?.image_url) {
+      setDetailImagePlaybackUrl(null);
+      setDetailImageError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setDetailImageError(null);
+    setDetailImagePlaybackUrl(null);
+
+    supabase.storage
+      .from("memories")
+      .createSignedUrl(detailMemory.image_url, 60 * 60)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.signedUrl) {
+          setDetailImageError("Could not load image.");
+          return;
+        }
+        setDetailImagePlaybackUrl(data.signedUrl);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detailMemory?.image_url, supabase]);
+
+  useEffect(() => {
     return () => {
       if (recordingTimerRef.current) {
         window.clearInterval(recordingTimerRef.current);
@@ -521,6 +626,12 @@ export default function MemoryListClient({
       }
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+    };
+  }, [photoPreviewUrl]);
 
   function formatRecordingSeconds(totalSeconds: number) {
     const minutes = Math.floor(totalSeconds / 60)
@@ -863,6 +974,8 @@ export default function MemoryListClient({
               background: "white",
               borderRadius: 14,
               padding: 16,
+              maxHeight: "90vh",
+              overflowY: "auto",
             }}
             onClick={(event) => event.stopPropagation()}
           >
@@ -1016,6 +1129,88 @@ export default function MemoryListClient({
                   )}
                   {recordedAudioPreviewUrl ? <audio controls src={recordedAudioPreviewUrl} /> : null}
                   {recordingError ? <p style={{ margin: 0, color: "rgb(220 38 38)" }}>{recordingError}</p> : null}
+                </div>
+              ) : null}
+
+              {addType === "photo" ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    borderRadius: 12,
+                    padding: 12,
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  <strong style={{ fontSize: 14 }}>Photo upload</strong>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <label
+                      style={{
+                        border: "1px solid rgba(0,0,0,0.15)",
+                        borderRadius: 10,
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Upload from device
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={(event) => {
+                          onPhotoFileChange(event.target.files?.[0] ?? null);
+                        }}
+                      />
+                    </label>
+                    <label
+                      style={{
+                        border: "1px solid rgba(0,0,0,0.15)",
+                        borderRadius: 10,
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Click photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        style={{ display: "none" }}
+                        onChange={(event) => {
+                          onPhotoFileChange(event.target.files?.[0] ?? null);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {photoPreviewUrl ? (
+                    <Image
+                      src={photoPreviewUrl}
+                      alt="Selected memory photo preview"
+                      width={800}
+                      height={560}
+                      unoptimized
+                      style={{
+                        width: "100%",
+                        maxHeight: 320,
+                        objectFit: "contain",
+                        borderRadius: 10,
+                        border: "1px solid rgba(0,0,0,0.08)",
+                      }}
+                    />
+                  ) : null}
+                  {photoFile ? (
+                    <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>
+                      {photoFile.name} ({Math.round(photoFile.size / 1024)} KB)
+                    </p>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>No image selected</p>
+                  )}
+                  {photoFile ? (
+                    <button type="button" onClick={clearPhotoSelection} style={{ width: "fit-content", borderRadius: 10, padding: "8px 12px" }}>
+                      Clear image
+                    </button>
+                  ) : null}
+                  {photoError ? <p style={{ margin: 0, color: "rgb(220 38 38)" }}>{photoError}</p> : null}
                 </div>
               ) : null}
             </div>
@@ -1206,6 +1401,46 @@ export default function MemoryListClient({
               </div>
             ) : null}
 
+            {detailMemory.type === "photo" ? (
+              <div style={{ marginTop: 12 }}>
+                {detailImagePlaybackUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => setImageViewerUrl(detailImagePlaybackUrl)}
+                    style={{
+                      border: "none",
+                      padding: 0,
+                      width: "100%",
+                      background: "transparent",
+                      cursor: "zoom-in",
+                    }}
+                    aria-label="Open full size photo"
+                  >
+                    <Image
+                      src={detailImagePlaybackUrl}
+                      alt={detailMemory.title ?? "Memory photo"}
+                      width={1200}
+                      height={900}
+                      unoptimized
+                      style={{
+                        width: "100%",
+                        maxHeight: 460,
+                        objectFit: "contain",
+                        borderRadius: 12,
+                        border: "1px solid rgba(0,0,0,0.08)",
+                      }}
+                    />
+                  </button>
+                ) : detailImageError ? (
+                  <p style={{ margin: 0, fontSize: 13, color: "rgb(220 38 38)" }}>{detailImageError}</p>
+                ) : detailMemory.image_url ? (
+                  <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>Loading image...</p>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>No photo attached</p>
+                )}
+              </div>
+            ) : null}
+
             <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
               {(detailMemory.tags ?? []).length ? (
                 (detailMemory.tags ?? []).map((tag) => (
@@ -1261,6 +1496,49 @@ export default function MemoryListClient({
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {imageViewerUrl ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            zIndex: 90,
+          }}
+          onClick={() => setImageViewerUrl(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 1200,
+              maxHeight: "92vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Image
+              src={imageViewerUrl}
+              alt="Memory photo full view"
+              width={1800}
+              height={1400}
+              unoptimized
+              style={{
+                width: "100%",
+                height: "auto",
+                maxHeight: "92vh",
+                objectFit: "contain",
+                borderRadius: 12,
+              }}
+            />
           </div>
         </div>
       ) : null}

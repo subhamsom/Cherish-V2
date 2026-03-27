@@ -5,12 +5,13 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { title, details, type, tags, audio_url } = body as {
+  const { title, details, type, tags, audio_url, image_url } = body as {
     title: string;
     details?: string | null;
     type: "text" | "voice" | "photo" | "gift" | "occasion";
     tags?: string[] | null;
     audio_url?: string | null;
+    image_url?: string | null;
   };
 
   const res = NextResponse.json({});
@@ -76,8 +77,9 @@ export async function POST(req: NextRequest) {
       content: trimmedDetails || trimmedTitle,
       tags: tags ?? null,
       audio_url: audio_url ?? null,
+      image_url: image_url ?? null,
     })
-    .select("id, user_id, partner_id, type, title, content, tags, audio_url, created_at")
+    .select("id, user_id, partner_id, type, title, content, tags, audio_url, image_url, created_at")
     .maybeSingle();
 
   if (insert.error) {
