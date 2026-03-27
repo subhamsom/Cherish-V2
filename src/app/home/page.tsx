@@ -87,6 +87,7 @@ export default async function HomePage() {
         tags: string[] | null;
         liked: boolean | null;
         pinned: boolean | null;
+        audio_url: string | null;
         created_at: string | null;
       }>
     | null = null;
@@ -94,7 +95,7 @@ export default async function HomePage() {
     const memoryResult = await withTimeout(
       supabase
         .from("memories")
-        .select("id, title, content, type, tags, liked, pinned, created_at")
+        .select("id, title, content, type, tags, liked, pinned, audio_url, created_at")
         .eq("partner_id", partner.id)
         .order("created_at", { ascending: false })
         .limit(20),
@@ -109,6 +110,7 @@ export default async function HomePage() {
         tags: string[] | null;
         liked: boolean | null;
         pinned: boolean | null;
+        audio_url: string | null;
         created_at: string | null;
       }> | null;
       error: unknown;

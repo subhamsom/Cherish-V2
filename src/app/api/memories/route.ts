@@ -5,11 +5,12 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { title, details, type, tags } = body as {
+  const { title, details, type, tags, audio_url } = body as {
     title: string;
     details?: string | null;
     type: "text" | "voice" | "photo" | "gift" | "occasion";
     tags?: string[] | null;
+    audio_url?: string | null;
   };
 
   const res = NextResponse.json({});
@@ -74,8 +75,9 @@ export async function POST(req: NextRequest) {
       // If details are missing, fall back to title so the insert succeeds.
       content: trimmedDetails || trimmedTitle,
       tags: tags ?? null,
+      audio_url: audio_url ?? null,
     })
-    .select("id, user_id, partner_id, type, title, content, tags, created_at")
+    .select("id, user_id, partner_id, type, title, content, tags, audio_url, created_at")
     .maybeSingle();
 
   if (insert.error) {

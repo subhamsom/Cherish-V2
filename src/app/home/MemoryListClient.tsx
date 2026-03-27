@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Calendar, Gift, Heart, Mic, MoreVertical, Pin, Plus, Trash2, Type, X } from "lucide-react";
 import { formatDate } from "@/lib/formatDate";
+import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 
 type Memory = {
   id: string;
@@ -13,6 +14,7 @@ type Memory = {
   tags: string[] | null;
   liked: boolean | null;
   pinned: boolean | null;
+  audio_url: string | null;
   created_at: string | null;
 };
 
@@ -57,6 +59,7 @@ type MemoryType = "text" | "voice" | "photo" | "gift" | "occasion";
 type PresetTag = (typeof PRESET_TAGS)[number];
 type MemoryFilter = "all" | MemoryType;
 type SortOption = "newest" | "oldest" | "random";
+const MAX_VOICE_FILE_BYTES = 10 * 1024 * 1024;
 
 const FILTER_OPTIONS: Array<{ value: MemoryFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -73,6 +76,7 @@ export default function MemoryListClient({
   initialMemories: Memory[];
 }) {
   const router = useRouter();
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [memories, setMemories] = useState<Memory[]>(initialMemories);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
@@ -88,7 +92,14 @@ export default function MemoryListClient({
   const [customTagsInput, setCustomTagsInput] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [recordingSupported, setRecordingSupported] = useState(false);
+  const [recordingBusy, setRecordingBusy] = useState(false);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
+  const [recordedAudioPreviewUrl, setRecordedAudioPreviewUrl] = useState<string | null>(null);
   const [detailMemory, setDetailMemory] = useState<Memory | null>(null);
+  const [detailAudioPlaybackUrl, setDetailAudioPlaybackUrl] = useState<string | null>(null);
+  const [detailAudioError, setDetailAudioError] = useState<string | null>(null);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [detailDeleteConfirm, setDetailDeleteConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,6 +108,10 @@ export default function MemoryListClient({
   const [sortBy, setSortBy] = useState<SortOption>("newest");
 
   const longPressTimer = useRef<number | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const recordingTimerRef = useRef<number | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const selectedCount = selectedIds.size;
 
@@ -104,6 +119,10 @@ export default function MemoryListClient({
     () => Array.from(selectedIds),
     [selectedIds],
   );
+
+  useEffect(() => {
+    setMemories(initialMemories);
+  }, [initialMemories]);
 
   const filteredMemories = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -215,12 +234,108 @@ export default function MemoryListClient({
       .filter(Boolean);
   }
 
+  async function startVoiceRecording() {
+    if (!recordingSupported || recordingBusy) return;
+    setRecordingError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+      recorderRef.current = recorder;
+      setRecordingBusy(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        if (recordingTimerRef.current) {
+          window.clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setRecordingSeconds(0);
+        if (blob.size > MAX_VOICE_FILE_BYTES) {
+          setRecordedAudioBlob(null);
+          setRecordedAudioPreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+          });
+          setRecordingError("Recording is too large. Please keep voice notes under 10MB.");
+          stream.getTracks().forEach((track) => track.stop());
+          setRecordingBusy(false);
+          return;
+        }
+        setRecordedAudioBlob(blob);
+        const nextPreviewUrl = URL.createObjectURL(blob);
+        setRecordedAudioPreviewUrl((prev) => {
+          if (prev) {
+            URL.revokeObjectURL(prev);
+          }
+          return nextPreviewUrl;
+        });
+        stream.getTracks().forEach((track) => track.stop());
+        setRecordingBusy(false);
+      };
+
+      recorder.onerror = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (recordingTimerRef.current) {
+          window.clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setRecordingSeconds(0);
+        setRecordingBusy(false);
+        setRecordingError("Recording failed. Please try again.");
+      };
+
+      recorder.start();
+    } catch {
+      setRecordingError("Microphone access was denied. Please allow microphone access and retry.");
+    }
+  }
+
+  function stopVoiceRecording() {
+    if (!recorderRef.current || recorderRef.current.state !== "recording") return;
+    recorderRef.current.stop();
+  }
+
+  function clearVoiceRecording() {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setRecordingSeconds(0);
+    setRecordedAudioPreviewUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
+      return null;
+    });
+    setRecordedAudioBlob(null);
+    setRecordingError(null);
+  }
+
   async function createMemory() {
     setAddError(null);
     const trimmedTitle = addTitle.trim();
     const trimmedDetails = addDetails.trim();
     if (!trimmedTitle) {
       setAddError("Title is required.");
+      return;
+    }
+    if (addType === "voice" && !recordedAudioBlob) {
+      setAddError("Please record your voice memory before saving.");
+      return;
+    }
+    if (addType === "voice" && recordingBusy) {
+      setAddError("Please stop recording before saving.");
       return;
     }
 
@@ -245,12 +360,68 @@ export default function MemoryListClient({
         setAddError(json.error ?? "Could not save memory.");
         return;
       }
+      const createdMemoryId = (json.memory?.id as string | undefined) ?? null;
+      if (addType === "voice" && !createdMemoryId) {
+        setAddError("Memory was created, but no ID was returned for audio upload.");
+        return;
+      }
+
+      if (addType === "voice" && recordedAudioBlob && createdMemoryId) {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
+          await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
+          setAddError("Could not verify your session for audio upload.");
+          return;
+        }
+
+        const extension = recordedAudioBlob.type.includes("mpeg") ? "mp3" : "webm";
+        const uploadForm = new FormData();
+        uploadForm.append(
+          "file",
+          new File([recordedAudioBlob], `voice-${Date.now()}.${extension}`, {
+            type: recordedAudioBlob.type || "audio/webm",
+          }),
+        );
+        uploadForm.append("type", "memory");
+        uploadForm.append("memory_id", createdMemoryId);
+        const uploadRes = await fetch("/api/media/upload", {
+          method: "POST",
+          body: uploadForm,
+        });
+        const uploadJson = await uploadRes.json().catch(() => ({}));
+
+        if (!uploadRes.ok || !uploadJson.path) {
+          await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
+          setAddError(
+            `Audio upload failed: ${uploadJson.details ?? uploadJson.error ?? "Unknown upload error"}`,
+          );
+          return;
+        }
+        const filePath = uploadJson.path as string;
+
+        const patch = await fetch(`/api/memories/${createdMemoryId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audio_url: filePath }),
+        });
+
+        if (!patch.ok) {
+          await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
+          setAddError("Audio uploaded, but saving the memory reference failed.");
+          return;
+        }
+      }
+
       setAddOpen(false);
       setAddTitle("");
       setAddDetails("");
       setAddType("text");
       setAddTags([]);
       setCustomTagsInput("");
+      clearVoiceRecording();
       router.refresh();
     } finally {
       setAddSubmitting(false);
@@ -300,6 +471,63 @@ export default function MemoryListClient({
       prev.map((item) => (item.id === memory.id ? { ...item, pinned: nextPinned } : item)),
     );
     setDetailMemory((prev) => (prev?.id === memory.id ? { ...prev, pinned: nextPinned } : prev));
+  }
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setRecordingSupported(Boolean(window.MediaRecorder && navigator.mediaDevices?.getUserMedia));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!detailMemory?.audio_url) {
+      setDetailAudioPlaybackUrl(null);
+      setDetailAudioError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setDetailAudioError(null);
+    setDetailAudioPlaybackUrl(null);
+
+    supabase.storage
+      .from("memories")
+      .createSignedUrl(detailMemory.audio_url, 60 * 60)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.signedUrl) {
+          setDetailAudioError("Could not load audio playback.");
+          return;
+        }
+        setDetailAudioPlaybackUrl(data.signedUrl);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detailMemory?.audio_url, supabase]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        window.clearInterval(recordingTimerRef.current);
+      }
+      setRecordedAudioPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      if (recorderRef.current?.state === "recording") {
+        recorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  function formatRecordingSeconds(totalSeconds: number) {
+    const minutes = Math.floor(totalSeconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+    return `${minutes}:${seconds}`;
   }
 
   return (
@@ -745,6 +973,51 @@ export default function MemoryListClient({
                   }}
                 />
               </label>
+
+              {addType === "voice" ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    borderRadius: 12,
+                    padding: 12,
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  <strong style={{ fontSize: 14 }}>Voice recording</strong>
+                  {!recordingSupported ? (
+                    <p style={{ margin: 0, fontSize: 13, opacity: 0.75 }}>
+                      Your browser does not support voice recording in this app.
+                    </p>
+                  ) : (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      {!recordingBusy ? (
+                        <button type="button" onClick={startVoiceRecording} style={{ borderRadius: 10, padding: "8px 12px" }}>
+                          {recordedAudioBlob ? "Record again" : "Start recording"}
+                        </button>
+                      ) : (
+                        <button type="button" onClick={stopVoiceRecording} style={{ borderRadius: 10, padding: "8px 12px" }}>
+                          Stop recording
+                        </button>
+                      )}
+                      {recordedAudioBlob ? (
+                        <button type="button" onClick={clearVoiceRecording} style={{ borderRadius: 10, padding: "8px 12px" }}>
+                          Clear
+                        </button>
+                      ) : null}
+                      <span style={{ fontSize: 12, opacity: 0.7 }}>
+                        {recordingBusy
+                          ? `Recording... ${formatRecordingSeconds(recordingSeconds)}`
+                          : recordedAudioBlob
+                            ? "Recording ready"
+                            : "No recording yet"}
+                      </span>
+                    </div>
+                  )}
+                  {recordedAudioPreviewUrl ? <audio controls src={recordedAudioPreviewUrl} /> : null}
+                  {recordingError ? <p style={{ margin: 0, color: "rgb(220 38 38)" }}>{recordingError}</p> : null}
+                </div>
+              ) : null}
             </div>
 
             {addError ? <p style={{ color: "rgb(220, 38, 38)", marginTop: 10 }}>{addError}</p> : null}
@@ -758,7 +1031,7 @@ export default function MemoryListClient({
                 onClick={async () => {
                   await createMemory();
                 }}
-                disabled={addSubmitting}
+                disabled={addSubmitting || (addType === "voice" && recordingBusy)}
                 style={{
                   background: "black",
                   color: "white",
@@ -918,6 +1191,20 @@ export default function MemoryListClient({
             <div style={{ marginTop: 12 }}>
               <TypeBadge type={detailMemory.type} />
             </div>
+
+            {detailMemory.type === "voice" ? (
+              <div style={{ marginTop: 12 }}>
+                {detailAudioPlaybackUrl ? (
+                  <audio controls src={detailAudioPlaybackUrl} />
+                ) : detailAudioError ? (
+                  <p style={{ margin: 0, fontSize: 13, color: "rgb(220 38 38)" }}>{detailAudioError}</p>
+                ) : detailMemory.audio_url ? (
+                  <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>Loading voice playback...</p>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>No recording attached</p>
+                )}
+              </div>
+            ) : null}
 
             <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
               {(detailMemory.tags ?? []).length ? (

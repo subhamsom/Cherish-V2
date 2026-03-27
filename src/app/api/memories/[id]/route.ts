@@ -25,13 +25,14 @@ export async function PUT(
 ) {
   const req = request as unknown as NextRequest;
   const body = await request.json();
-  const { title, details, type, tags, liked, pinned } = body as {
+  const { title, details, type, tags, liked, pinned, audio_url } = body as {
     title?: string;
     details?: string | null;
     type?: MemoryType;
     tags?: string[] | null;
     liked?: boolean;
     pinned?: boolean;
+    audio_url?: string | null;
   };
 
   const id = (context as { params?: { id?: string } }).params?.id;
@@ -98,6 +99,10 @@ export async function PUT(
     updates.pinned = pinned;
   }
 
+  if (audio_url !== undefined) {
+    updates.audio_url = audio_url;
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
@@ -107,7 +112,7 @@ export async function PUT(
     .update(updates)
     .eq("id", id)
     .eq("partner_id", partnerId)
-    .select("id, title, content, type, tags, liked, pinned, created_at")
+    .select("id, title, content, type, tags, liked, pinned, audio_url, created_at")
     .maybeSingle();
 
   if (update.error) {
