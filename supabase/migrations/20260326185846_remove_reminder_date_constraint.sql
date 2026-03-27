@@ -1,0 +1,1 @@
+ALTER TABLE reminders DROP CONSTRAINT IF EXISTS valid_date;

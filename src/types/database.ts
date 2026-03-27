@@ -190,11 +190,14 @@ export type Database = {
           date: string
           id: string
           lead_time_days: number | null
+          note: string | null
           partner_id: string
           price: number | null
+          recurrence: string | null
           recurring: boolean | null
           reminder_time: string
           snoozed_until: string | null
+          tags: string[] | null
           title: string
           type: string
           updated_at: string | null
@@ -207,11 +210,14 @@ export type Database = {
           date: string
           id?: string
           lead_time_days?: number | null
+          note?: string | null
           partner_id: string
           price?: number | null
+          recurrence?: string | null
           recurring?: boolean | null
           reminder_time: string
           snoozed_until?: string | null
+          tags?: string[] | null
           title: string
           type: string
           updated_at?: string | null
@@ -224,11 +230,14 @@ export type Database = {
           date?: string
           id?: string
           lead_time_days?: number | null
+          note?: string | null
           partner_id?: string
           price?: number | null
+          recurrence?: string | null
           recurring?: boolean | null
           reminder_time?: string
           snoozed_until?: string | null
+          tags?: string[] | null
           title?: string
           type?: string
           updated_at?: string | null
