@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Calendar, Gift, Mic, Plus, Type, X } from "lucide-react";
+import { Camera, Calendar, Gift, Mic, MoreVertical, Plus, Trash2, Type, X } from "lucide-react";
 import { formatDate } from "@/lib/formatDate";
 
 type Memory = {
@@ -10,6 +10,7 @@ type Memory = {
   title: string | null;
   content: string;
   type: string;
+  tags: string[] | null;
   created_at: string | null;
 };
 
@@ -84,6 +85,9 @@ export default function MemoryListClient({
   const [customTagsInput, setCustomTagsInput] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [detailMemory, setDetailMemory] = useState<Memory | null>(null);
+  const [detailMenuOpen, setDetailMenuOpen] = useState(false);
+  const [detailDeleteConfirm, setDetailDeleteConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<MemoryFilter>("all");
 
@@ -219,6 +223,17 @@ export default function MemoryListClient({
     }
   }
 
+  async function deleteMemoryById(id: string) {
+    const res = await fetch(`/api/memories/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      return;
+    }
+    setMemories((prev) => prev.filter((memory) => memory.id !== id));
+    setDetailDeleteConfirm(false);
+    setDetailMenuOpen(false);
+    setDetailMemory(null);
+  }
+
   return (
     <section>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -300,7 +315,9 @@ export default function MemoryListClient({
                 onPointerCancel={onCardPointerUp}
                 onClick={(e) => {
                   if (!selectionMode) {
-                    router.push(`/memories/${memory.id}`);
+                    setDetailMemory(memory);
+                    setDetailMenuOpen(false);
+                    setDetailDeleteConfirm(false);
                     return;
                   }
                   e.stopPropagation();
@@ -324,6 +341,7 @@ export default function MemoryListClient({
                       <input
                         type="checkbox"
                         checked={selected}
+                        onClick={(event) => event.stopPropagation()}
                         onChange={() => toggleSelected(memory.id)}
                       />
                       Select
@@ -601,6 +619,195 @@ export default function MemoryListClient({
                 {addSubmitting ? "Saving..." : "Save this memory"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {detailMemory ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.38)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 70,
+          }}
+          onClick={() => {
+            setDetailMemory(null);
+            setDetailMenuOpen(false);
+            setDetailDeleteConfirm(false);
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 620,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              background: "white",
+              borderRadius: 14,
+              padding: 16,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 24, lineHeight: 1.2 }}>
+                {detailMemory.title ?? detailMemory.content}
+              </h3>
+              <div style={{ position: "relative", display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setDetailMenuOpen((prev) => !prev)}
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.15)",
+                    borderRadius: 8,
+                    padding: 6,
+                  }}
+                  aria-label="Memory actions"
+                >
+                  <MoreVertical size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailMemory(null);
+                    setDetailMenuOpen(false);
+                    setDetailDeleteConfirm(false);
+                  }}
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.15)",
+                    borderRadius: 8,
+                    padding: 6,
+                  }}
+                  aria-label="Close memory details"
+                >
+                  <X size={14} />
+                </button>
+
+                {detailMenuOpen ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 36,
+                      top: 34,
+                      minWidth: 170,
+                      background: "white",
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      borderRadius: 12,
+                      padding: 6,
+                      zIndex: 2,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailMenuOpen(false);
+                        router.push(`/memories/${detailMemory.id}/edit`);
+                      }}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Edit Memory
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailMenuOpen(false);
+                        setDetailDeleteConfirm(true);
+                      }}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                        cursor: "pointer",
+                        color: "rgb(220 38 38)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      Delete Memory
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <p style={{ marginTop: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{detailMemory.content}</p>
+
+            <div style={{ marginTop: 12 }}>
+              <TypeBadge type={detailMemory.type} />
+            </div>
+
+            <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {(detailMemory.tags ?? []).length ? (
+                (detailMemory.tags ?? []).map((tag) => (
+                  <span
+                    key={`${detailMemory.id}-tag-${tag}`}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 999,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      fontSize: 12,
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))
+              ) : (
+                <span style={{ fontSize: 12, opacity: 0.7 }}>No tags</span>
+              )}
+            </div>
+
+            <p style={{ marginTop: 12, fontSize: 13, opacity: 0.7 }}>
+              Created: {detailMemory.created_at ? formatDate(detailMemory.created_at) : "-"}
+            </p>
+
+            {detailDeleteConfirm ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  border: "1px solid rgba(239,68,68,0.35)",
+                  borderRadius: 12,
+                  padding: 12,
+                }}
+              >
+                <p style={{ margin: 0 }}>Delete this memory? This cannot be undone.</p>
+                <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button type="button" onClick={() => setDetailDeleteConfirm(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await deleteMemoryById(detailMemory.id);
+                    }}
+                    style={{
+                      background: "rgb(239 68 68)",
+                      color: "white",
+                      borderRadius: 10,
+                      padding: "8px 12px",
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

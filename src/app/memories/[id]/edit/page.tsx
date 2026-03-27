@@ -122,7 +122,7 @@ export default function EditMemoryPage() {
         return;
       }
 
-      router.push(`/memories/${id}`);
+      router.push("/home");
     } finally {
       setSubmitting(false);
     }
@@ -240,7 +240,7 @@ export default function EditMemoryPage() {
               {submitting ? "Saving..." : "Save changes"}
             </button>
             <Link
-              href={`/memories/${id}`}
+              href="/home"
               className="px-5 py-3 rounded-lg border border-zinc-200 bg-white text-black hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
             >
               Cancel

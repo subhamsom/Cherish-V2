@@ -84,6 +84,7 @@ export default async function HomePage() {
         title: string | null;
         content: string;
         type: string;
+        tags: string[] | null;
         created_at: string | null;
       }>
     | null = null;
@@ -91,7 +92,7 @@ export default async function HomePage() {
     const memoryResult = await withTimeout(
       supabase
         .from("memories")
-        .select("id, title, content, type, created_at")
+        .select("id, title, content, type, tags, created_at")
         .eq("partner_id", partner.id)
         .order("created_at", { ascending: false })
         .limit(20),
@@ -103,6 +104,7 @@ export default async function HomePage() {
         title: string | null;
         content: string;
         type: string;
+        tags: string[] | null;
         created_at: string | null;
       }> | null;
       error: unknown;
