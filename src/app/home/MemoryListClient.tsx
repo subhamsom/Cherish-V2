@@ -29,6 +29,29 @@ function displayMemoryDateLabel(memory: Memory): string {
   return "";
 }
 
+const CARD_TITLE_MAX_CHARS = 50;
+
+function truncateCardTitle(title: string): string {
+  if (title.length <= CARD_TITLE_MAX_CHARS) return title;
+  return `${title.slice(0, CARD_TITLE_MAX_CHARS)}\u2026`;
+}
+
+/** Title + optional description for text cards (avoid duplicating title when content is only the fallback). */
+function textMemoryCardFields(memory: Memory): { headline: string; descriptionPreview: string | null } {
+  const rawTitle = (memory.title ?? "").trim();
+  const rawContent = (memory.content ?? "").trim();
+  const headline = rawTitle || rawContent;
+  if (!rawTitle) {
+    return { headline, descriptionPreview: null };
+  }
+  if (!rawContent || rawContent === rawTitle) {
+    return { headline, descriptionPreview: null };
+  }
+  return { headline, descriptionPreview: (memory.content ?? "").trim() };
+}
+
+const MAX_TAGS_ON_CARD = 3;
+
 const TYPE_META: Record<
   string,
   { label: string; Icon: typeof Type }
@@ -1056,8 +1079,16 @@ export default function MemoryListClient({
         <div style={{ display: "grid", gap: 12 }}>
           {filteredMemories.map((memory) => {
             const selected = selectedIds.has(memory.id);
-            const title = memory.title ?? memory.content;
+            const isText = memory.type === "text";
+            const { headline, descriptionPreview } = isText
+              ? textMemoryCardFields(memory)
+              : { headline: memory.title ?? memory.content, descriptionPreview: null as string | null };
+            const cardTitleDisplay = truncateCardTitle(headline);
             const memoryDateLabel = displayMemoryDateLabel(memory);
+            const cardTags = (memory.tags ?? [])
+              .map((t) => String(t).trim())
+              .filter((t) => t.length > 0);
+            const extraTagCount = Math.max(0, cardTags.length - MAX_TAGS_ON_CARD);
 
             return (
               <div
@@ -1087,6 +1118,7 @@ export default function MemoryListClient({
                   background: selected
                     ? "rgba(0,0,0,0.04)"
                     : "rgba(255,255,255,0.0)",
+                  minWidth: 0,
                 }}
               >
                 {selectionMode ? (
@@ -1103,9 +1135,21 @@ export default function MemoryListClient({
                   </div>
                 ) : null}
 
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <strong>{title}</strong>
+                <div
+                  className="min-w-0"
+                  style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}
+                >
+                  <div
+                    className="min-w-0 flex-1"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+                  >
+                    <strong
+                      className="min-w-0 max-w-full break-words"
+                      style={{ fontWeight: 700, display: "block" }}
+                      title={headline.length > CARD_TITLE_MAX_CHARS ? headline : undefined}
+                    >
+                      {cardTitleDisplay}
+                    </strong>
                     {memory.pinned ? (
                       <span
                         style={{
@@ -1119,6 +1163,7 @@ export default function MemoryListClient({
                           padding: "2px 8px",
                           fontSize: 11,
                           lineHeight: 1.2,
+                          flexShrink: 0,
                         }}
                         aria-label="Pinned memory"
                       >
@@ -1127,7 +1172,14 @@ export default function MemoryListClient({
                       </span>
                     ) : null}
                   </div>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexShrink: 0,
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={async (event) => {
@@ -1150,12 +1202,60 @@ export default function MemoryListClient({
                     <span style={{ fontSize: 12, opacity: 0.75 }}>{memoryDateLabel}</span>
                   </div>
                 </div>
-                <p style={{ fontSize: 14, opacity: 0.8, marginTop: 6 }}>
-                  {memory.content}
-                </p>
-                <div style={{ marginTop: 8 }}>
-                  <TypeBadge type={memory.type} />
-                </div>
+                {isText ? (
+                  descriptionPreview ? (
+                    <p
+                      className="line-clamp-2 break-words whitespace-pre-line"
+                      style={{ fontSize: 14, opacity: 0.8, marginTop: 6, marginBottom: 0 }}
+                    >
+                      {descriptionPreview}
+                    </p>
+                  ) : null
+                ) : (
+                  <p style={{ fontSize: 14, opacity: 0.8, marginTop: 6 }}>
+                    {memory.content}
+                  </p>
+                )}
+                {cardTags.length ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      alignItems: "center",
+                    }}
+                  >
+                    {cardTags.slice(0, MAX_TAGS_ON_CARD).map((tag, i) => (
+                      <span
+                        key={`${memory.id}-tag-${i}-${tag}`}
+                        style={{
+                          fontSize: 11,
+                          lineHeight: 1.2,
+                          padding: "3px 8px",
+                          borderRadius: 999,
+                          border: "1px solid rgba(0,0,0,0.12)",
+                          background: "rgba(0,0,0,0.04)",
+                          color: "rgba(0,0,0,0.75)",
+                          maxWidth: "100%",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                    {extraTagCount > 0 ? (
+                      <span style={{ fontSize: 11, opacity: 0.65 }}>+{extraTagCount} more</span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {!isText || descriptionPreview ? (
+                  <div style={{ marginTop: 8 }}>
+                    <TypeBadge type={memory.type} />
+                  </div>
+                ) : null}
               </div>
             );
           })}
