@@ -49,6 +49,7 @@ export type Database = {
           id: string
           image_url: string | null
           liked: boolean | null
+          memory_date: string
           partner_id: string
           pinned: boolean | null
           price: number | null
@@ -67,6 +68,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           liked?: boolean | null
+          memory_date?: string
           partner_id: string
           pinned?: boolean | null
           price?: number | null
@@ -85,6 +87,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           liked?: boolean | null
+          memory_date?: string
           partner_id?: string
           pinned?: boolean | null
           price?: number | null

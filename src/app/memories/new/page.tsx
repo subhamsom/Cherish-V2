@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Camera, Calendar, Gift, Mic, Type } from "lucide-react";
+import { todayIsoDateLocal } from "@/lib/formatDate";
 
 const MEMORY_TYPES = [
   { value: "text", label: "Text", Icon: Type },
@@ -33,6 +34,7 @@ export default function NewMemoryPage() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const [title, setTitle] = useState("");
+  const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
   const [details, setDetails] = useState("");
   const [type, setType] = useState<MemoryType>("text");
   const [tags, setTags] = useState<PresetTag[]>([]);
@@ -52,6 +54,12 @@ export default function NewMemoryPage() {
 
     if (!trimmedTitle) {
       setError("Title is required.");
+      return;
+    }
+
+    const md = memoryDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(md)) {
+      setError("Please choose a valid date.");
       return;
     }
 
@@ -75,6 +83,7 @@ export default function NewMemoryPage() {
           details: trimmedDetails ? trimmedDetails : null,
           type,
           tags: tags.length ? tags : null,
+          memory_date: md,
         }),
       });
 
@@ -115,6 +124,16 @@ export default function NewMemoryPage() {
               placeholder="e.g. Our first walk in the rain"
               required
               className="border border-zinc-200 rounded-lg px-3 py-2 bg-white text-black dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </label>
+
+          <label className="flex flex-col gap-2">
+            <span className="text-sm text-zinc-600 dark:text-zinc-400">Date</span>
+            <input
+              type="date"
+              value={memoryDate}
+              onChange={(e) => setMemoryDate(e.target.value)}
+              className="border border-zinc-200 rounded-lg px-3 py-2 bg-white text-black dark:bg-zinc-900 dark:text-zinc-50 dark:border-zinc-800"
             />
           </label>
 

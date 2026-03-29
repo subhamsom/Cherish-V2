@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Camera, Calendar, Gift, Heart, Mic, MoreVertical, Pin, Plus, Trash2, Type, X } from "lucide-react";
-import { formatDate } from "@/lib/formatDate";
+import { formatMemoryDate, isoDateFromCreatedAt, todayIsoDateLocal } from "@/lib/formatDate";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 
 type Memory = {
@@ -17,8 +17,17 @@ type Memory = {
   pinned: boolean | null;
   audio_url: string | null;
   image_url: string | null;
+  /** Postgres DATE as YYYY-MM-DD */
+  memory_date?: string | null;
   created_at: string | null;
 };
+
+function displayMemoryDateLabel(memory: Memory): string {
+  const raw = memory.memory_date?.trim();
+  if (raw) return formatMemoryDate(raw);
+  if (memory.created_at) return formatMemoryDate(isoDateFromCreatedAt(memory.created_at));
+  return "";
+}
 
 const TYPE_META: Record<
   string,
@@ -89,6 +98,7 @@ export default function MemoryListClient({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addTitle, setAddTitle] = useState("");
+  const [addMemoryDate, setAddMemoryDate] = useState(todayIsoDateLocal);
   const [addDetails, setAddDetails] = useState("");
   const [addType, setAddType] = useState<MemoryType>("text");
   const [addTags, setAddTags] = useState<PresetTag[]>([]);
@@ -111,6 +121,22 @@ export default function MemoryListClient({
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
   const [detailDeleteConfirm, setDetailDeleteConfirm] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editMemoryId, setEditMemoryId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editMemoryDate, setEditMemoryDate] = useState("");
+  const [editDetails, setEditDetails] = useState("");
+  const [editType, setEditType] = useState<MemoryType>("text");
+  const [editTags, setEditTags] = useState<PresetTag[]>([]);
+  const [editCustomTagsInput, setEditCustomTagsInput] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editVoiceFile, setEditVoiceFile] = useState<File | null>(null);
+  const [editVoicePreviewUrl, setEditVoicePreviewUrl] = useState<string | null>(null);
+  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
+  const [editPhotoPreviewUrl, setEditPhotoPreviewUrl] = useState<string | null>(null);
+  const [editAudioPath, setEditAudioPath] = useState<string | null>(null);
+  const [editImagePath, setEditImagePath] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<MemoryFilter>("all");
   const [activeMoodFilter, setActiveMoodFilter] = useState<PresetTag | null>(null);
@@ -150,8 +176,12 @@ export default function MemoryListClient({
     const pinned = filtered.filter((memory) => Boolean(memory.pinned));
     const others = filtered.filter((memory) => !memory.pinned);
 
-    const sortByCreatedAt = (items: Memory[], direction: "asc" | "desc") =>
+    const sortChronological = (items: Memory[], direction: "asc" | "desc") =>
       [...items].sort((a, b) => {
+        const aDate = (a.memory_date?.trim() || (a.created_at ? isoDateFromCreatedAt(a.created_at) : "")) || "";
+        const bDate = (b.memory_date?.trim() || (b.created_at ? isoDateFromCreatedAt(b.created_at) : "")) || "";
+        const dateCmp = direction === "asc" ? aDate.localeCompare(bDate) : bDate.localeCompare(aDate);
+        if (dateCmp !== 0) return dateCmp;
         const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
         const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
         return direction === "asc" ? aTime - bTime : bTime - aTime;
@@ -167,9 +197,9 @@ export default function MemoryListClient({
     };
 
     const sortList = (items: Memory[]) => {
-      if (sortBy === "oldest") return sortByCreatedAt(items, "asc");
+      if (sortBy === "oldest") return sortChronological(items, "asc");
       if (sortBy === "random") return randomize(items);
-      return sortByCreatedAt(items, "desc");
+      return sortChronological(items, "desc");
     };
 
     return [...sortList(pinned), ...sortList(others)];
@@ -236,11 +266,125 @@ export default function MemoryListClient({
     setAddTags((prev) => (prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]));
   }
 
+  function toggleEditTag(tag: PresetTag) {
+    setEditTags((prev) => (prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]));
+  }
+
   function parseCustomTags(value: string) {
     return value
       .split(",")
       .map((part) => part.trim().toLowerCase())
       .filter(Boolean);
+  }
+
+  function openEditModal(memory: Memory) {
+    const memoryTags = memory.tags ?? [];
+    const preset = memoryTags.filter((tag): tag is PresetTag =>
+      (PRESET_TAGS as readonly string[]).includes(tag),
+    );
+    const custom = memoryTags.filter(
+      (tag) => !(PRESET_TAGS as readonly string[]).includes(tag),
+    );
+
+    setEditMemoryId(memory.id);
+    setEditTitle(memory.title ?? memory.content);
+    setEditMemoryDate(
+      memory.memory_date?.trim() ||
+        (memory.created_at ? isoDateFromCreatedAt(memory.created_at) : todayIsoDateLocal()),
+    );
+    setEditDetails(memory.content ?? "");
+    setEditType((memory.type as MemoryType) ?? "text");
+    setEditTags(preset);
+    setEditCustomTagsInput(custom.join(", "));
+    setEditAudioPath(memory.audio_url ?? null);
+    setEditImagePath(memory.image_url ?? null);
+    setEditVoiceFile(null);
+    setEditPhotoFile(null);
+    setEditVoicePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setEditPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setEditError(null);
+    setEditOpen(true);
+    setDetailMenuOpen(false);
+  }
+
+  function closeEditModal() {
+    setEditOpen(false);
+    setEditMemoryId(null);
+    setEditTitle("");
+    setEditMemoryDate("");
+    setEditDetails("");
+    setEditType("text");
+    setEditTags([]);
+    setEditCustomTagsInput("");
+    setEditAudioPath(null);
+    setEditImagePath(null);
+    setEditVoiceFile(null);
+    setEditPhotoFile(null);
+    setEditVoicePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setEditPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setEditError(null);
+  }
+
+  function onEditVoiceFileChange(file: File | null) {
+    if (!file) {
+      setEditVoiceFile(null);
+      setEditVoicePreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+    if (!file.type.startsWith("audio/")) {
+      setEditError("Please select a valid audio file for voice memory.");
+      return;
+    }
+    if (file.size > MAX_VOICE_FILE_BYTES) {
+      setEditError("Voice file is too large. Please keep it under 10MB.");
+      return;
+    }
+    setEditVoiceFile(file);
+    const nextPreview = URL.createObjectURL(file);
+    setEditVoicePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return nextPreview;
+    });
+  }
+
+  function onEditPhotoFileChange(file: File | null) {
+    if (!file) {
+      setEditPhotoFile(null);
+      setEditPhotoPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setEditError("Please select a valid image file for photo memory.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_FILE_BYTES) {
+      setEditError("Image file is too large. Please keep it under 20MB.");
+      return;
+    }
+    setEditPhotoFile(file);
+    const nextPreview = URL.createObjectURL(file);
+    setEditPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return nextPreview;
+    });
   }
 
   async function startVoiceRecording() {
@@ -370,6 +514,11 @@ export default function MemoryListClient({
       setAddError("Title is required.");
       return;
     }
+    const md = addMemoryDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(md)) {
+      setAddError("Please choose a valid date.");
+      return;
+    }
     if (addType === "voice" && !recordedAudioBlob) {
       setAddError("Please record your voice memory before saving.");
       return;
@@ -397,6 +546,7 @@ export default function MemoryListClient({
           details: trimmedDetails || null,
           type: addType,
           tags: mergedTags.length ? mergedTags : null,
+          memory_date: md,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -493,6 +643,7 @@ export default function MemoryListClient({
 
       setAddOpen(false);
       setAddTitle("");
+      setAddMemoryDate(todayIsoDateLocal());
       setAddDetails("");
       setAddType("text");
       setAddTags([]);
@@ -548,6 +699,151 @@ export default function MemoryListClient({
       prev.map((item) => (item.id === memory.id ? { ...item, pinned: nextPinned } : item)),
     );
     setDetailMemory((prev) => (prev?.id === memory.id ? { ...prev, pinned: nextPinned } : prev));
+  }
+
+  async function saveEditedMemory() {
+    if (!editMemoryId) return;
+    const trimmedTitle = editTitle.trim();
+    const trimmedDetails = editDetails.trim();
+    if (!trimmedTitle) {
+      setEditError("Title is required.");
+      return;
+    }
+    if (editType === "voice" && !editAudioPath && !editVoiceFile) {
+      setEditError("Please add an audio file for voice memory.");
+      return;
+    }
+    if (editType === "photo" && !editImagePath && !editPhotoFile) {
+      setEditError("Please add an image for photo memory.");
+      return;
+    }
+
+    const resolvedMd = editMemoryDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(resolvedMd)) {
+      setEditError("Please choose a valid date.");
+      return;
+    }
+
+    setEditError(null);
+    setEditSubmitting(true);
+    try {
+      const mergedTags = Array.from(
+        new Set([...editTags, ...parseCustomTags(editCustomTagsInput)]),
+      );
+      const res = await fetch(`/api/memories/${editMemoryId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: trimmedTitle,
+          details: trimmedDetails || null,
+          type: editType,
+          tags: mergedTags.length ? mergedTags : null,
+          memory_date: resolvedMd,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setEditError(json.error ?? "Could not save memory changes.");
+        return;
+      }
+
+      let nextAudioPath: string | null = editAudioPath;
+      let nextImagePath: string | null = editImagePath;
+
+      if (editType === "voice") {
+        if (editVoiceFile) {
+          const uploadForm = new FormData();
+          uploadForm.append("file", editVoiceFile);
+          uploadForm.append("type", "memory");
+          uploadForm.append("memory_id", editMemoryId);
+          const uploadRes = await fetch("/api/media/upload", {
+            method: "POST",
+            body: uploadForm,
+          });
+          const uploadJson = await uploadRes.json().catch(() => ({}));
+          if (!uploadRes.ok || !uploadJson.path) {
+            setEditError(uploadJson.details ?? uploadJson.error ?? "Could not upload voice file.");
+            return;
+          }
+          nextAudioPath = uploadJson.path as string;
+        }
+        nextImagePath = null;
+      } else if (editType === "photo") {
+        if (editPhotoFile) {
+          const uploadForm = new FormData();
+          uploadForm.append("file", editPhotoFile);
+          uploadForm.append("type", "memory");
+          uploadForm.append("memory_id", editMemoryId);
+          const uploadRes = await fetch("/api/media/upload", {
+            method: "POST",
+            body: uploadForm,
+          });
+          const uploadJson = await uploadRes.json().catch(() => ({}));
+          if (!uploadRes.ok || !uploadJson.path) {
+            setEditError(uploadJson.details ?? uploadJson.error ?? "Could not upload photo.");
+            return;
+          }
+          nextImagePath = uploadJson.path as string;
+        }
+        nextAudioPath = null;
+      } else {
+        nextAudioPath = null;
+        nextImagePath = null;
+      }
+
+      const mediaPatch = await fetch(`/api/memories/${editMemoryId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audio_url: nextAudioPath,
+          image_url: nextImagePath,
+        }),
+      });
+      const mediaJson = await mediaPatch.json().catch(() => ({}));
+      if (!mediaPatch.ok) {
+        setEditError("Could not update memory media.");
+        return;
+      }
+
+      const updated = (json.memory ?? {}) as Partial<Memory>;
+      const finalMemoryDate =
+        (mediaJson.memory as { memory_date?: string } | undefined)?.memory_date ??
+        (updated.memory_date as string | undefined) ??
+        resolvedMd;
+      setMemories((prev) =>
+        prev.map((memory) =>
+          memory.id === editMemoryId
+            ? {
+                ...memory,
+                title: (updated.title as string | null | undefined) ?? trimmedTitle,
+                content: (updated.content as string | undefined) ?? (trimmedDetails || trimmedTitle),
+                type: (updated.type as string | undefined) ?? editType,
+                tags: (updated.tags as string[] | null | undefined) ?? (mergedTags.length ? mergedTags : null),
+                audio_url: nextAudioPath,
+                image_url: nextImagePath,
+                memory_date: finalMemoryDate,
+              }
+            : memory,
+        ),
+      );
+      setDetailMemory((prev) =>
+        prev?.id === editMemoryId
+          ? {
+              ...prev,
+              title: (updated.title as string | null | undefined) ?? trimmedTitle,
+              content: (updated.content as string | undefined) ?? (trimmedDetails || trimmedTitle),
+              type: (updated.type as string | undefined) ?? editType,
+              tags: (updated.tags as string[] | null | undefined) ?? (mergedTags.length ? mergedTags : null),
+              audio_url: nextAudioPath,
+              image_url: nextImagePath,
+              memory_date: finalMemoryDate,
+            }
+          : prev,
+      );
+      closeEditModal();
+    } finally {
+      setEditSubmitting(false);
+    }
   }
 
   useEffect(() => {
@@ -633,6 +929,13 @@ export default function MemoryListClient({
     };
   }, [photoPreviewUrl]);
 
+  useEffect(() => {
+    return () => {
+      if (editVoicePreviewUrl) URL.revokeObjectURL(editVoicePreviewUrl);
+      if (editPhotoPreviewUrl) URL.revokeObjectURL(editPhotoPreviewUrl);
+    };
+  }, [editVoicePreviewUrl, editPhotoPreviewUrl]);
+
   function formatRecordingSeconds(totalSeconds: number) {
     const minutes = Math.floor(totalSeconds / 60)
       .toString()
@@ -647,7 +950,10 @@ export default function MemoryListClient({
         <h2>Recent Memories</h2>
         <button
           type="button"
-          onClick={() => setAddOpen(true)}
+          onClick={() => {
+            setAddMemoryDate(todayIsoDateLocal());
+            setAddOpen(true);
+          }}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -751,7 +1057,7 @@ export default function MemoryListClient({
           {filteredMemories.map((memory) => {
             const selected = selectedIds.has(memory.id);
             const title = memory.title ?? memory.content;
-            const created = memory.created_at ? formatDate(memory.created_at) : "";
+            const memoryDateLabel = displayMemoryDateLabel(memory);
 
             return (
               <div
@@ -841,7 +1147,7 @@ export default function MemoryListClient({
                     >
                       <Heart size={16} fill={memory.liked ? "currentColor" : "none"} />
                     </button>
-                    <span style={{ fontSize: 12, opacity: 0.75 }}>{created}</span>
+                    <span style={{ fontSize: 12, opacity: 0.75 }}>{memoryDateLabel}</span>
                   </div>
                 </div>
                 <p style={{ fontSize: 14, opacity: 0.8, marginTop: 6 }}>
@@ -994,6 +1300,16 @@ export default function MemoryListClient({
                   onChange={(event) => setAddTitle(event.target.value)}
                   placeholder="e.g. Our first walk in the rain"
                   style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: "10px 12px" }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 13, opacity: 0.75 }}>Date</span>
+                <input
+                  type="date"
+                  value={addMemoryDate}
+                  onChange={(event) => setAddMemoryDate(event.target.value)}
+                  style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: "10px 12px", fontSize: 14 }}
                 />
               </label>
 
@@ -1338,8 +1654,7 @@ export default function MemoryListClient({
                     <button
                       type="button"
                       onClick={() => {
-                        setDetailMenuOpen(false);
-                        router.push(`/memories/${detailMemory.id}/edit`);
+                        openEditModal(detailMemory);
                       }}
                       style={{
                         width: "100%",
@@ -1462,7 +1777,7 @@ export default function MemoryListClient({
             </div>
 
             <p style={{ marginTop: 12, fontSize: 13, opacity: 0.7 }}>
-              Created: {detailMemory.created_at ? formatDate(detailMemory.created_at) : "-"}
+              Date: {displayMemoryDateLabel(detailMemory) || "-"}
             </p>
 
             {detailDeleteConfirm ? (
@@ -1496,6 +1811,242 @@ export default function MemoryListClient({
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {editOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 85,
+          }}
+          onClick={closeEditModal}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 560,
+              background: "white",
+              borderRadius: 14,
+              padding: 16,
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>Edit Memory</h3>
+              <button type="button" onClick={closeEditModal} style={{ border: "1px solid rgba(0,0,0,0.15)", borderRadius: 8, padding: 6 }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 14 }}>Title</span>
+                <input
+                  value={editTitle}
+                  onChange={(event) => setEditTitle(event.target.value)}
+                  placeholder="e.g. Our first walk in the rain"
+                  style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: "10px 12px" }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 13, opacity: 0.75 }}>Date</span>
+                <input
+                  type="date"
+                  value={editMemoryDate}
+                  onChange={(event) => setEditMemoryDate(event.target.value)}
+                  style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: "10px 12px", fontSize: 14 }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 14 }}>Details</span>
+                <textarea
+                  value={editDetails}
+                  onChange={(event) => setEditDetails(event.target.value)}
+                  placeholder="The little things worth remembering..."
+                  style={{ minHeight: 100, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: "10px 12px" }}
+                />
+              </label>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  overflowX: "auto",
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  borderRadius: 12,
+                  background: "rgba(0,0,0,0.03)",
+                  padding: 4,
+                }}
+              >
+                {(Object.keys(TYPE_META) as MemoryType[]).map((key) => {
+                  const active = editType === key;
+                  const Icon = TYPE_META[key].Icon;
+                  return (
+                    <button
+                      key={`edit-${key}`}
+                      type="button"
+                      onClick={() => setEditType(key)}
+                      style={{
+                        border: "none",
+                        background: active ? "black" : "transparent",
+                        color: active ? "white" : "black",
+                        borderRadius: 9,
+                        padding: "8px 10px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        whiteSpace: "nowrap",
+                        boxShadow: active ? "0 1px 2px rgba(0,0,0,0.2)" : "none",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <Icon size={14} />
+                      {TYPE_META[key].label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {PRESET_TAGS.map((tag) => {
+                  const active = editTags.includes(tag);
+                  return (
+                    <button
+                      key={`edit-tag-${tag}`}
+                      type="button"
+                      onClick={() => toggleEditTag(tag)}
+                      style={{
+                        border: active ? "1px solid rgba(0,0,0,0.25)" : "1px solid rgba(0,0,0,0.10)",
+                        background: active ? "rgba(0,0,0,0.10)" : "rgba(0,0,0,0.02)",
+                        color: "black",
+                        borderRadius: 999,
+                        padding: "4px 9px",
+                        fontSize: 12,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 13, opacity: 0.75 }}>Custom tags</span>
+                <input
+                  value={editCustomTagsInput}
+                  onChange={(event) => setEditCustomTagsInput(event.target.value)}
+                  placeholder="Add your own tags, comma separated"
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    borderRadius: 10,
+                    padding: "9px 11px",
+                    fontSize: 13,
+                  }}
+                />
+              </label>
+
+              {editType === "voice" ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    borderRadius: 12,
+                    padding: 12,
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  <strong style={{ fontSize: 14 }}>Voice file</strong>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(event) => onEditVoiceFileChange(event.target.files?.[0] ?? null)}
+                  />
+                  {editVoicePreviewUrl ? <audio controls src={editVoicePreviewUrl} /> : null}
+                  {!editVoicePreviewUrl && editAudioPath ? (
+                    <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>
+                      Existing voice recording attached. Choose a file to replace it.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {editType === "photo" ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    borderRadius: 12,
+                    padding: 12,
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  <strong style={{ fontSize: 14 }}>Photo file</strong>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => onEditPhotoFileChange(event.target.files?.[0] ?? null)}
+                  />
+                  {editPhotoPreviewUrl ? (
+                    <Image
+                      src={editPhotoPreviewUrl}
+                      alt="Selected replacement memory photo"
+                      width={800}
+                      height={560}
+                      unoptimized
+                      style={{
+                        width: "100%",
+                        maxHeight: 320,
+                        objectFit: "contain",
+                        borderRadius: 10,
+                        border: "1px solid rgba(0,0,0,0.08)",
+                      }}
+                    />
+                  ) : null}
+                  {!editPhotoPreviewUrl && editImagePath ? (
+                    <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>
+                      Existing photo attached. Choose an image to replace it.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {editError ? <p style={{ color: "rgb(220, 38, 38)", marginTop: 10 }}>{editError}</p> : null}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+              <button type="button" onClick={closeEditModal} disabled={editSubmitting}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await saveEditedMemory();
+                }}
+                disabled={editSubmitting}
+                style={{
+                  background: "black",
+                  color: "white",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                }}
+              >
+                {editSubmitting ? "Saving..." : "Save changes"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

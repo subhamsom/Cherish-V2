@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import { Calendar, Camera, Gift, Mic, MoreVertical, Pencil, Trash2, Type } from "lucide-react";
 import Link from "next/link";
-import { formatDate } from "@/lib/formatDate";
+import { formatMemoryDate, isoDateFromCreatedAt } from "@/lib/formatDate";
 
 type Memory = {
   id: string;
@@ -13,8 +13,16 @@ type Memory = {
   content: string;
   type: string;
   tags: string[] | null;
+  memory_date?: string | null;
   created_at: string | null;
 };
+
+function memoryDateLabel(memory: Memory): string {
+  const raw = memory.memory_date?.trim();
+  if (raw) return formatMemoryDate(raw);
+  if (memory.created_at) return formatMemoryDate(isoDateFromCreatedAt(memory.created_at));
+  return "";
+}
 
 const TYPE_META: Record<
   string,
@@ -105,7 +113,7 @@ export default function MemoryViewPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("memories")
-        .select("id, title, content, type, tags, created_at")
+        .select("id, title, content, type, tags, memory_date, created_at")
         .eq("id", id)
         .maybeSingle();
 
@@ -244,8 +252,7 @@ export default function MemoryViewPage() {
         </div>
 
         <p style={{ marginTop: 12, opacity: 0.65 }}>
-          Created:{" "}
-          {memory.created_at ? formatDate(memory.created_at) : "-"}
+          Date: {memoryDateLabel(memory) || "-"}
         </p>
       </section>
 

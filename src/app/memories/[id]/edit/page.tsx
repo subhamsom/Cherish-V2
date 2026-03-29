@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import { Camera, Calendar, Gift, Mic, Type } from "lucide-react";
+import { isoDateFromCreatedAt, todayIsoDateLocal } from "@/lib/formatDate";
 
 const MEMORY_TYPES = [
   { value: "text", label: "Text", Icon: Type },
@@ -34,6 +35,8 @@ type Memory = {
   content: string;
   type: string;
   tags: string[] | null;
+  memory_date?: string | null;
+  created_at?: string | null;
 };
 
 export default function EditMemoryPage() {
@@ -45,6 +48,7 @@ export default function EditMemoryPage() {
   const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
+  const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
   const [details, setDetails] = useState("");
   const [type, setType] = useState<MemoryType>("text");
   const [tags, setTags] = useState<PresetTag[]>([]);
@@ -63,7 +67,7 @@ export default function EditMemoryPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("memories")
-        .select("id, title, content, type, tags")
+        .select("id, title, content, type, tags, memory_date, created_at")
         .eq("id", id)
         .maybeSingle();
 
@@ -77,6 +81,10 @@ export default function EditMemoryPage() {
 
       setMemory(data);
       setTitle(data?.title ?? "");
+      setMemoryDate(
+        data?.memory_date?.trim() ||
+          (data?.created_at ? isoDateFromCreatedAt(data.created_at) : todayIsoDateLocal()),
+      );
       setDetails(data?.content ?? "");
       setType((data?.type as MemoryType) ?? "text");
       setTags((data?.tags as PresetTag[] | null) ?? []);
@@ -101,6 +109,12 @@ export default function EditMemoryPage() {
       return;
     }
 
+    const md = memoryDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(md)) {
+      setError("Please choose a valid date.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       if (!id) return;
@@ -113,6 +127,7 @@ export default function EditMemoryPage() {
           details: trimmedDetails ? trimmedDetails : null,
           type,
           tags: tags.length ? tags : null,
+          memory_date: md,
         }),
       });
 
@@ -162,6 +177,16 @@ export default function EditMemoryPage() {
               onChange={(e) => setTitle(e.target.value)}
               required
               className="border border-zinc-200 rounded-lg px-3 py-2 bg-white text-black dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </label>
+
+          <label className="flex flex-col gap-2">
+            <span className="text-sm text-zinc-600 dark:text-zinc-400">Date</span>
+            <input
+              type="date"
+              value={memoryDate}
+              onChange={(e) => setMemoryDate(e.target.value)}
+              className="border border-zinc-200 rounded-lg px-3 py-2 bg-white text-black dark:bg-zinc-900 dark:text-zinc-50 dark:border-zinc-800"
             />
           </label>
 

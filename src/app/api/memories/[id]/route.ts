@@ -5,6 +5,9 @@ import { NextResponse } from "next/server";
 
 type MemoryType = "text" | "voice" | "photo" | "gift" | "occasion";
 
+const MEMORY_SELECT =
+  "id, title, content, type, tags, liked, pinned, audio_url, image_url, memory_date, created_at";
+
 async function getPartnerIdOrThrow(
   supabaseAuth: ReturnType<typeof createServerSupabaseClient>,
   userId: string,
@@ -19,13 +22,51 @@ async function getPartnerIdOrThrow(
   return partner.data.id;
 }
 
+export async function GET(request: Request, context: unknown) {
+  const req = request as unknown as NextRequest;
+  const id = (context as { params?: { id?: string } }).params?.id;
+  if (!id) {
+    return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  }
+  const res = NextResponse.json({});
+
+  const supabaseAuth = createServerSupabaseClient(req, res);
+  const {
+    data: { user },
+    error: userError,
+  } = await supabaseAuth.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data, error } = await supabaseAuth
+    .from("memories")
+    .select(MEMORY_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Could not load memory", details: error.message },
+      { status: 500 },
+    );
+  }
+
+  if (!data) {
+    return NextResponse.json({ error: "Memory not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ memory: data }, { status: 200 });
+}
+
 export async function PUT(
   request: Request,
   context: unknown,
 ) {
   const req = request as unknown as NextRequest;
   const body = await request.json();
-  const { title, details, type, tags, liked, pinned, audio_url, image_url } = body as {
+  const { title, details, type, tags, liked, pinned, audio_url, image_url, memory_date } = body as {
     title?: string;
     details?: string | null;
     type?: MemoryType;
@@ -34,6 +75,7 @@ export async function PUT(
     pinned?: boolean;
     audio_url?: string | null;
     image_url?: string | null;
+    memory_date?: string;
   };
 
   const id = (context as { params?: { id?: string } }).params?.id;
@@ -108,6 +150,14 @@ export async function PUT(
     updates.image_url = image_url;
   }
 
+  if (memory_date !== undefined) {
+    const md = String(memory_date).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(md)) {
+      return NextResponse.json({ error: "Invalid memory_date (use YYYY-MM-DD)" }, { status: 400 });
+    }
+    updates.memory_date = md;
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
@@ -117,7 +167,7 @@ export async function PUT(
     .update(updates)
     .eq("id", id)
     .eq("partner_id", partnerId)
-    .select("id, title, content, type, tags, liked, pinned, audio_url, image_url, created_at")
+    .select(MEMORY_SELECT)
     .maybeSingle();
 
   if (update.error) {
@@ -132,6 +182,10 @@ export async function PUT(
   }
 
   return NextResponse.json({ memory: update.data }, { status: 200 });
+}
+
+export async function PATCH(request: Request, context: unknown) {
+  return PUT(request, context);
 }
 
 export async function DELETE(

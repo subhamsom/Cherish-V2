@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -14,7 +14,7 @@ function extForMime(mime: string): string | null {
   return null;
 }
 
-async function ensureProfilesBucket(admin: ReturnType<typeof createClient>) {
+async function ensureProfilesBucket(admin: SupabaseClient) {
   const { data: buckets, error: listError } = await admin.storage.listBuckets();
   if (listError) return;
   const exists = buckets?.some((b) => b.name === BUCKET || b.id === BUCKET);
