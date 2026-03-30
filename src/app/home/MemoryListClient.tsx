@@ -1245,6 +1245,9 @@ export default function MemoryListClient({
             const { headline, descriptionPreview } = isText
               ? textMemoryCardFields(memory)
               : { headline: memory.title ?? memory.content, descriptionPreview: null as string | null };
+            const rawTitle = (memory.title ?? "").trim();
+            const rawContent = (memory.content ?? "").trim();
+            const hasDescription = rawContent && (!rawTitle || rawContent !== rawTitle);
             const cardTitleDisplay = truncateCardTitle(headline);
             const memoryDateLabel = displayMemoryDateLabel(memory);
             const cardTags = (memory.tags ?? [])
@@ -1374,9 +1377,11 @@ export default function MemoryListClient({
                     </p>
                   ) : null
                 ) : (
-                  <p style={{ fontSize: 14, opacity: 0.8, marginTop: 6 }}>
-                    {memory.content}
-                  </p>
+                  hasDescription ? (
+                    <p style={{ fontSize: 14, opacity: 0.8, marginTop: 6 }}>
+                      {memory.content}
+                    </p>
+                  ) : null
                 )}
                 {cardTags.length ? (
                   <div
