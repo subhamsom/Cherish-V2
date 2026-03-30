@@ -24,7 +24,11 @@ async function getPartnerIdOrThrow(
 
 export async function GET(request: Request, context: unknown) {
   const req = request as unknown as NextRequest;
-  const id = (context as { params?: { id?: string } }).params?.id;
+  const params = (context as { params?: unknown }).params as unknown;
+  const id =
+    params && typeof (params as { then?: unknown }).then === "function"
+      ? (await params as { id?: string }).id
+      : (params as { id?: string } | undefined)?.id;
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
@@ -78,7 +82,11 @@ export async function PUT(
     memory_date?: string;
   };
 
-  const id = (context as { params?: { id?: string } }).params?.id;
+  const params = (context as { params?: unknown }).params as unknown;
+  const id =
+    params && typeof (params as { then?: unknown }).then === "function"
+      ? (await params as { id?: string }).id
+      : (params as { id?: string } | undefined)?.id;
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
@@ -193,7 +201,11 @@ export async function DELETE(
   context: unknown,
 ) {
   const req = request as unknown as NextRequest;
-  const id = (context as { params?: { id?: string } }).params?.id;
+  const params = (context as { params?: unknown }).params as unknown;
+  const id =
+    params && typeof (params as { then?: unknown }).then === "function"
+      ? (await params as { id?: string }).id
+      : (params as { id?: string } | undefined)?.id;
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }

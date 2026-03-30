@@ -131,8 +131,10 @@ export default function MemoryListClient({
   const [recordingSupported, setRecordingSupported] = useState(false);
   const [recordingBusy, setRecordingBusy] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [recordingInterrupted, setRecordingInterrupted] = useState(false);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [recordedAudioPreviewUrl, setRecordedAudioPreviewUrl] = useState<string | null>(null);
+  const [voiceUploading, setVoiceUploading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -156,6 +158,9 @@ export default function MemoryListClient({
   const [editError, setEditError] = useState<string | null>(null);
   const [editVoiceFile, setEditVoiceFile] = useState<File | null>(null);
   const [editVoicePreviewUrl, setEditVoicePreviewUrl] = useState<string | null>(null);
+  const [editReplaceVoice, setEditReplaceVoice] = useState(false);
+  const [editVoicePlaybackUrl, setEditVoicePlaybackUrl] = useState<string | null>(null);
+  const [editVoicePlaybackError, setEditVoicePlaybackError] = useState<string | null>(null);
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
   const [editPhotoPreviewUrl, setEditPhotoPreviewUrl] = useState<string | null>(null);
   const [editAudioPath, setEditAudioPath] = useState<string | null>(null);
@@ -167,9 +172,12 @@ export default function MemoryListClient({
 
   const longPressTimer = useRef<number | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const stopRequestedRef = useRef(false);
+  const recordingInterruptedRef = useRef(false);
 
   const selectedCount = selectedIds.size;
 
@@ -327,6 +335,9 @@ export default function MemoryListClient({
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
+    setEditReplaceVoice(false);
+    setEditVoicePlaybackUrl(null);
+    setEditVoicePlaybackError(null);
     setEditPhotoPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -337,6 +348,8 @@ export default function MemoryListClient({
   }
 
   function closeEditModal() {
+    // If anything is recording, release mic + stop immediately.
+    clearVoiceRecording();
     setEditOpen(false);
     setEditMemoryId(null);
     setEditTitle("");
@@ -349,6 +362,9 @@ export default function MemoryListClient({
     setEditImagePath(null);
     setEditVoiceFile(null);
     setEditPhotoFile(null);
+    setEditReplaceVoice(false);
+    setEditVoicePlaybackUrl(null);
+    setEditVoicePlaybackError(null);
     setEditVoicePreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -360,29 +376,11 @@ export default function MemoryListClient({
     setEditError(null);
   }
 
-  function onEditVoiceFileChange(file: File | null) {
-    if (!file) {
-      setEditVoiceFile(null);
-      setEditVoicePreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
-      return;
-    }
-    if (!file.type.startsWith("audio/")) {
-      setEditError("Please select a valid audio file for voice memory.");
-      return;
-    }
-    if (file.size > MAX_VOICE_FILE_BYTES) {
-      setEditError("Voice file is too large. Please keep it under 10MB.");
-      return;
-    }
-    setEditVoiceFile(file);
-    const nextPreview = URL.createObjectURL(file);
-    setEditVoicePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return nextPreview;
-    });
+  function closeAddModal() {
+    // If the modal is dismissed mid-recording, release the microphone immediately.
+    clearVoiceRecording();
+    setAddError(null);
+    setAddOpen(false);
   }
 
   function onEditPhotoFileChange(file: File | null) {
@@ -412,9 +410,13 @@ export default function MemoryListClient({
 
   async function startVoiceRecording() {
     if (!recordingSupported || recordingBusy) return;
+    recordingInterruptedRef.current = false;
+    stopRequestedRef.current = false;
+    setRecordingInterrupted(false);
     setRecordingError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
       const recorder = new MediaRecorder(stream);
       recordedChunksRef.current = [];
       recorderRef.current = recorder;
@@ -423,6 +425,33 @@ export default function MemoryListClient({
       recordingTimerRef.current = window.setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
+
+      const handleMicrophoneLost = () => {
+        if (recordingInterruptedRef.current) return;
+        recordingInterruptedRef.current = true;
+        setRecordingInterrupted(true);
+        setRecordingError("Microphone access was lost. Please try again.");
+
+        if (recordingTimerRef.current) {
+          window.clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+
+        setRecordingSeconds(0);
+        recordedChunksRef.current = [];
+        setRecordedAudioBlob(null);
+        setRecordedAudioPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        setRecordingBusy(false);
+
+        try {
+          stream.getTracks().forEach((track) => track.stop());
+        } catch {
+          // ignore
+        }
+      };
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -437,6 +466,11 @@ export default function MemoryListClient({
           recordingTimerRef.current = null;
         }
         setRecordingSeconds(0);
+        if (recordingInterruptedRef.current) {
+          setRecordingBusy(false);
+          return;
+        }
+
         if (blob.size > MAX_VOICE_FILE_BYTES) {
           setRecordedAudioBlob(null);
           setRecordedAudioPreviewUrl((prev) => {
@@ -460,34 +494,66 @@ export default function MemoryListClient({
         setRecordingBusy(false);
       };
 
+      recorder.addEventListener("inactive", () => {
+        if (stopRequestedRef.current) return;
+        handleMicrophoneLost();
+      });
+
+      stream.getAudioTracks().forEach((track) => {
+        track.addEventListener("ended", () => {
+          if (stopRequestedRef.current) return;
+          handleMicrophoneLost();
+        });
+      });
+
       recorder.onerror = () => {
-        stream.getTracks().forEach((track) => track.stop());
-        if (recordingTimerRef.current) {
-          window.clearInterval(recordingTimerRef.current);
-          recordingTimerRef.current = null;
-        }
-        setRecordingSeconds(0);
-        setRecordingBusy(false);
-        setRecordingError("Recording failed. Please try again.");
+        recordingInterruptedRef.current = true;
+        setRecordingInterrupted(false);
+        handleMicrophoneLost();
       };
 
       recorder.start();
     } catch {
-      setRecordingError("Microphone access was denied. Please allow microphone access and retry.");
+      setRecordingError("Microphone permission is required to record audio.");
     }
   }
 
   function stopVoiceRecording() {
     if (!recorderRef.current || recorderRef.current.state !== "recording") return;
+    stopRequestedRef.current = true;
     recorderRef.current.stop();
   }
 
   function clearVoiceRecording() {
+    stopRequestedRef.current = true;
+    recordingInterruptedRef.current = true;
+    setRecordingInterrupted(false);
+
+    if (mediaStreamRef.current) {
+      try {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      } catch {
+        // ignore
+      }
+      mediaStreamRef.current = null;
+    }
+    recordedChunksRef.current = [];
+
+    if (recorderRef.current?.state === "recording") {
+      try {
+        recorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    }
+    recorderRef.current = null;
+
     if (recordingTimerRef.current) {
       window.clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
     setRecordingSeconds(0);
+    setRecordingBusy(false);
     setRecordedAudioPreviewUrl((prev) => {
       if (prev) {
         URL.revokeObjectURL(prev);
@@ -542,16 +608,20 @@ export default function MemoryListClient({
       setAddError("Please choose a valid date.");
       return;
     }
-    if (addType === "voice" && !recordedAudioBlob) {
-      setAddError("Please record your voice memory before saving.");
-      return;
-    }
     if (addType === "photo" && !photoFile) {
       setAddError("Please choose an image for your photo memory.");
       return;
     }
     if (addType === "voice" && recordingBusy) {
       setAddError("Please stop recording before saving.");
+      return;
+    }
+    if (addType === "voice" && recordingInterrupted) {
+      setAddError("Microphone access was lost. Please try again.");
+      return;
+    }
+    if (addType === "voice" && !recordedAudioBlob) {
+      setAddError("Please record your voice memory before saving.");
       return;
     }
 
@@ -604,31 +674,36 @@ export default function MemoryListClient({
         );
         uploadForm.append("type", "memory");
         uploadForm.append("memory_id", createdMemoryId);
-        const uploadRes = await fetch("/api/media/upload", {
-          method: "POST",
-          body: uploadForm,
-        });
-        const uploadJson = await uploadRes.json().catch(() => ({}));
+        setVoiceUploading(true);
+        try {
+          const uploadRes = await fetch("/api/media/upload", {
+            method: "POST",
+            body: uploadForm,
+          });
+          const uploadJson = await uploadRes.json().catch(() => ({}));
 
-        if (!uploadRes.ok || !uploadJson.path) {
-          await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
-          setAddError(
-            `Audio upload failed: ${uploadJson.details ?? uploadJson.error ?? "Unknown upload error"}`,
-          );
-          return;
-        }
-        const filePath = uploadJson.path as string;
+          if (!uploadRes.ok || !uploadJson.path) {
+            await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
+            setAddError(
+              `Audio upload failed: ${uploadJson.details ?? uploadJson.error ?? "Unknown upload error"}`,
+            );
+            return;
+          }
+          const filePath = uploadJson.path as string;
 
-        const patch = await fetch(`/api/memories/${createdMemoryId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ audio_url: filePath }),
-        });
+          const patch = await fetch(`/api/memories/${createdMemoryId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio_url: filePath }),
+          });
 
-        if (!patch.ok) {
-          await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
-          setAddError("Audio uploaded, but saving the memory reference failed.");
-          return;
+          if (!patch.ok) {
+            await fetch(`/api/memories/${createdMemoryId}`, { method: "DELETE" }).catch(() => undefined);
+            setAddError("Audio uploaded, but saving the memory reference failed.");
+            return;
+          }
+        } finally {
+          setVoiceUploading(false);
         }
       }
 
@@ -728,6 +803,17 @@ export default function MemoryListClient({
     if (!editMemoryId) return;
     const trimmedTitle = editTitle.trim();
     const trimmedDetails = editDetails.trim();
+
+    if (editType === "voice" && recordingBusy) {
+      setEditError("Please stop recording before saving.");
+      return;
+    }
+
+    if (editType === "voice" && recordingInterrupted) {
+      setEditError("Microphone access was lost. Please try again.");
+      return;
+    }
+
     if (!trimmedTitle) {
       setEditError("Title is required.");
       return;
@@ -875,6 +961,19 @@ export default function MemoryListClient({
     }
   }, []);
 
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!addOpen && !editOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (addOpen) closeAddModal();
+      else if (editOpen) closeEditModal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [addOpen, editOpen]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+
   useEffect(() => {
     if (!detailMemory?.audio_url) {
       setDetailAudioPlaybackUrl(null);
@@ -902,6 +1001,61 @@ export default function MemoryListClient({
       cancelled = true;
     };
   }, [detailMemory?.audio_url, supabase]);
+
+  useEffect(() => {
+    // When the user records a replacement in the edit modal,
+    // map the newly recorded blob into `editVoiceFile` so the existing
+    // upload/save logic can run unchanged.
+    if (!editOpen || !editReplaceVoice) return;
+
+    if (!recordedAudioBlob) {
+      setEditVoiceFile(null);
+      setEditVoicePreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+
+    const extension = recordedAudioBlob.type.includes("mpeg") ? "mp3" : "webm";
+    const nextFile = new File([recordedAudioBlob], `voice-${Date.now()}.${extension}`, {
+      type: recordedAudioBlob.type || "audio/webm",
+    });
+
+    setEditVoiceFile(nextFile);
+    setEditVoicePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(recordedAudioBlob);
+    });
+  }, [editOpen, editReplaceVoice, recordedAudioBlob]);
+
+  useEffect(() => {
+    if (!editOpen || !editAudioPath) {
+      setEditVoicePlaybackUrl(null);
+      setEditVoicePlaybackError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setEditVoicePlaybackError(null);
+    setEditVoicePlaybackUrl(null);
+
+    supabase.storage
+      .from("memories")
+      .createSignedUrl(editAudioPath, 60 * 60)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.signedUrl) {
+          setEditVoicePlaybackError("Could not load current recording.");
+          return;
+        }
+        setEditVoicePlaybackUrl(data.signedUrl);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editOpen, editAudioPath, supabase]);
 
   useEffect(() => {
     if (!detailMemory?.image_url) {
@@ -940,6 +1094,14 @@ export default function MemoryListClient({
         if (prev) URL.revokeObjectURL(prev);
         return null;
       });
+      if (mediaStreamRef.current) {
+        try {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        } catch {
+          // ignore
+        }
+        mediaStreamRef.current = null;
+      }
       if (recorderRef.current?.state === "recording") {
         recorderRef.current.stop();
       }
@@ -1371,7 +1533,7 @@ export default function MemoryListClient({
             padding: 16,
             zIndex: 60,
           }}
-          onClick={() => setAddOpen(false)}
+          onClick={closeAddModal}
         >
           <div
             style={{
@@ -1387,7 +1549,7 @@ export default function MemoryListClient({
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <h3 style={{ margin: 0 }}>Add Memory</h3>
-              <button type="button" onClick={() => setAddOpen(false)} style={{ border: "1px solid rgba(0,0,0,0.15)", borderRadius: 8, padding: 6 }}>
+              <button type="button" onClick={closeAddModal} style={{ border: "1px solid rgba(0,0,0,0.15)", borderRadius: 8, padding: 6 }}>
                 <X size={14} />
               </button>
             </div>
@@ -1634,7 +1796,7 @@ export default function MemoryListClient({
             {addError ? <p style={{ color: "rgb(220, 38, 38)", marginTop: 10 }}>{addError}</p> : null}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-              <button type="button" onClick={() => setAddOpen(false)}>
+              <button type="button" onClick={closeAddModal}>
                 Cancel
               </button>
               <button
@@ -1642,7 +1804,7 @@ export default function MemoryListClient({
                 onClick={async () => {
                   await createMemory();
                 }}
-                disabled={addSubmitting || (addType === "voice" && recordingBusy)}
+                disabled={addSubmitting}
                 style={{
                   background: "black",
                   color: "white",
@@ -1650,7 +1812,7 @@ export default function MemoryListClient({
                   padding: "10px 14px",
                 }}
               >
-                {addSubmitting ? "Saving..." : "Save this memory"}
+                {addSubmitting ? (voiceUploading ? "Saving audio..." : "Saving...") : "Save this memory"}
               </button>
             </div>
           </div>
@@ -2070,16 +2232,107 @@ export default function MemoryListClient({
                   }}
                 >
                   <strong style={{ fontSize: 14 }}>Voice file</strong>
-                  <input
-                    type="file"
-                    accept="audio/*"
-                    onChange={(event) => onEditVoiceFileChange(event.target.files?.[0] ?? null)}
-                  />
-                  {editVoicePreviewUrl ? <audio controls src={editVoicePreviewUrl} /> : null}
-                  {!editVoicePreviewUrl && editAudioPath ? (
-                    <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>
-                      Existing voice recording attached. Choose a file to replace it.
-                    </p>
+                  {editAudioPath ? (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>Current recording</p>
+                      {editVoicePlaybackUrl ? (
+                        <audio controls src={editVoicePlaybackUrl} />
+                      ) : editVoicePlaybackError ? (
+                        <p style={{ margin: 0, fontSize: 12, color: "rgb(220 38 38)" }}>
+                          {editVoicePlaybackError}
+                        </p>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>
+                          Loading current recording...
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>No recording attached</p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditReplaceVoice(true);
+                      // Start replacement with a clean recording state.
+                      clearVoiceRecording();
+                      // Start immediately to avoid a redundant second click.
+                      void startVoiceRecording();
+                    }}
+                    style={{
+                      width: "fit-content",
+                      borderRadius: 10,
+                      padding: "8px 12px",
+                      border: "1px solid rgba(0,0,0,0.15)",
+                      background: "white",
+                    }}
+                  >
+                    Replace recording
+                  </button>
+
+                  {editReplaceVoice ? (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <strong style={{ fontSize: 13 }}>Record a new voice note</strong>
+
+                      {!recordingSupported ? (
+                        <p style={{ margin: 0, fontSize: 12, opacity: 0.75 }}>
+                          Your browser does not support voice recording in this app.
+                        </p>
+                      ) : (
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          {recordingBusy ? (
+                            <button
+                              type="button"
+                              onClick={stopVoiceRecording}
+                              style={{ borderRadius: 10, padding: "8px 12px" }}
+                            >
+                              Stop recording
+                            </button>
+                          ) : null}
+
+                          {recordedAudioBlob ? (
+                            <button
+                              type="button"
+                              onClick={clearVoiceRecording}
+                              style={{ borderRadius: 10, padding: "8px 12px" }}
+                            >
+                              Clear
+                            </button>
+                          ) : null}
+
+                          {!recordingBusy && !recordedAudioBlob ? (
+                            <>
+                              {recordingError ? (
+                                <button
+                                  type="button"
+                                  onClick={startVoiceRecording}
+                                  style={{ borderRadius: 10, padding: "8px 12px" }}
+                                >
+                                  Try again
+                                </button>
+                              ) : null}
+                              <span style={{ fontSize: 12, opacity: 0.7 }}>
+                                {recordingError
+                                  ? "Waiting for microphone…"
+                                  : "Requesting microphone…"}
+                              </span>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: 12, opacity: 0.7 }}>
+                              {recordingBusy
+                                ? `Recording... ${formatRecordingSeconds(recordingSeconds)}`
+                                : recordedAudioBlob
+                                  ? "Recording ready"
+                                  : "No recording yet"}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {recordedAudioPreviewUrl ? <audio controls src={recordedAudioPreviewUrl} /> : null}
+                      {recordingError ? <p style={{ margin: 0, color: "rgb(220 38 38)" }}>{recordingError}</p> : null}
+                    </div>
                   ) : null}
                 </div>
               ) : null}
