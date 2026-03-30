@@ -318,12 +318,19 @@ export default function MemoryListClient({
     );
 
     setEditMemoryId(memory.id);
-    setEditTitle(memory.title ?? memory.content);
+    const resolvedTitle = memory.title ?? memory.content;
+    const rawTitle = (memory.title ?? "").trim();
+    const rawContent = (memory.content ?? "").trim();
+    const isTextLike = memory.type === "text" || memory.type === "gift" || memory.type === "occasion";
+    const resolvedDetailsForEdit =
+      isTextLike && rawTitle && rawContent === rawTitle ? "" : (memory.content ?? "");
+
+    setEditTitle(resolvedTitle);
     setEditMemoryDate(
       memory.memory_date?.trim() ||
         (memory.created_at ? isoDateFromCreatedAt(memory.created_at) : todayIsoDateLocal()),
     );
-    setEditDetails(memory.content ?? "");
+    setEditDetails(resolvedDetailsForEdit);
     setEditType((memory.type as MemoryType) ?? "text");
     setEditTags(preset);
     setEditCustomTagsInput(custom.join(", "));
@@ -1854,6 +1861,12 @@ export default function MemoryListClient({
             }}
             onClick={(event) => event.stopPropagation()}
           >
+            {(() => {
+              const detailTitle = (detailMemory.title ?? "").trim();
+              const detailContent = (detailMemory.content ?? "").trim();
+              const detailHasDescription = detailContent && (!detailTitle || detailContent !== detailTitle);
+              return (
+                <>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
               <h3 style={{ margin: 0, fontSize: 24, lineHeight: 1.2 }}>
                 {detailMemory.title ?? detailMemory.content}
@@ -1963,7 +1976,9 @@ export default function MemoryListClient({
               </div>
             </div>
 
-            <p style={{ marginTop: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{detailMemory.content}</p>
+            {detailHasDescription ? (
+              <p style={{ marginTop: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{detailMemory.content}</p>
+            ) : null}
 
             <div style={{ marginTop: 12 }}>
               <TypeBadge type={detailMemory.type} />
@@ -2078,6 +2093,9 @@ export default function MemoryListClient({
                 </div>
               </div>
             ) : null}
+                </>
+              );
+            })()}
           </div>
         </div>
       ) : null}
