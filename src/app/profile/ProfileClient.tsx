@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Calendar, Camera, Loader2, Pencil, X } from "lucide-react";
-import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 
 type Partner = {
   id: string;
@@ -12,26 +11,36 @@ type Partner = {
   name: string;
   photo_url: string | null;
   relationship_start_date: string | null;
+  bio: string | null;
 };
 
+function formatPartnerDate(yyyyMmDd: string | null): string | null {
+  if (!yyyyMmDd) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(yyyyMmDd.trim());
+  if (!match) return yyyyMmDd;
+  const day = Number(match[3]);
+  const month = Number(match[2]) - 1;
+  const year = Number(match[1]);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  if (month < 0 || month > 11) return yyyyMmDd;
+  return `${day} ${months[month]} ${year}`;
+}
+
 export default function ProfileClient({
-  userEmail,
   partner,
 }: {
-  userEmail: string;
   partner: Partner | null;
 }) {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(partner?.name ?? "");
   const [relationshipStartDate, setRelationshipStartDate] = useState(
     partner?.relationship_start_date ?? "",
   );
+  const [bio, setBio] = useState(partner?.bio ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +63,7 @@ export default function ProfileClient({
         body: JSON.stringify({
           name: trimmedName,
           photo_url: partner?.photo_url ?? null,
+          bio: bio.trim() ? bio.trim() : null,
           relationship_start_date: relationshipStartDate || null,
         }),
       });
@@ -99,17 +109,6 @@ export default function ProfileClient({
       router.refresh();
     } finally {
       setPhotoUploading(false);
-    }
-  }
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    try {
-      await supabase.auth.signOut();
-      router.replace("/");
-      router.refresh();
-    } finally {
-      setSigningOut(false);
     }
   }
 
@@ -182,6 +181,9 @@ export default function ProfileClient({
             <div className="min-w-0">
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Partner</p>
               <p className="font-medium">{partner?.name ?? "Not set yet"}</p>
+              {partner?.bio?.trim() ? (
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{partner.bio}</p>
+              ) : null}
               {photoUploadError ? (
                 <p className="mt-1 text-xs text-red-600 dark:text-red-400">{photoUploadError}</p>
               ) : null}
@@ -192,26 +194,11 @@ export default function ProfileClient({
             <Calendar size={14} />
             <span>
               {partner?.relationship_start_date
-                ? `Together since ${partner.relationship_start_date}`
+                ? `Together since ${formatPartnerDate(partner.relationship_start_date)}`
                 : "Relationship start date not set"}
             </span>
           </div>
         </div>
-
-        <div className="mt-5 hidden md:block">
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            className="rounded-xl border border-zinc-200 px-4 py-2 text-sm text-red-600 dark:border-zinc-700 dark:text-red-400"
-          >
-            {signingOut ? "Signing out..." : "Sign out"}
-          </button>
-        </div>
-
-        <p className="mt-8 hidden text-xs text-zinc-500 dark:text-zinc-400 md:block">
-          Signed in as {userEmail}
-        </p>
       </section>
 
       {editOpen ? (
@@ -234,6 +221,17 @@ export default function ProfileClient({
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="e.g. Mansi"
+                  className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm">A little about them</span>
+                <textarea
+                  value={bio}
+                  onChange={(event) => setBio(event.target.value)}
+                  rows={4}
+                  placeholder="What makes them, them..."
                   className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
                 />
               </label>

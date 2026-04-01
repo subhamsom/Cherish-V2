@@ -10,6 +10,34 @@ function createServiceRoleClient() {
   );
 }
 
+export async function GET(req: NextRequest) {
+  const res = NextResponse.json({});
+  const supabaseAuth = createServerSupabaseClient(req, res);
+  const {
+    data: { user },
+    error: userError,
+  } = await supabaseAuth.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data, error } = await supabaseAuth
+    .from("partners")
+    .select("id, user_id, name, photo_url, relationship_start_date, bio, updated_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Could not load partner", details: error.message },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ partner: data }, { status: 200 });
+}
+
 export async function PUT(req: NextRequest) {
   const body = await req.json();
   const { name, photo_url, relationship_start_date, bio } = body as {
@@ -72,5 +100,9 @@ export async function PUT(req: NextRequest) {
   }
 
   return NextResponse.json({ partner: upsertPartner.data }, { status: 200 });
+}
+
+export async function PATCH(req: NextRequest) {
+  return PUT(req);
 }
 

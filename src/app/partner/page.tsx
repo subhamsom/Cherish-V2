@@ -17,17 +17,12 @@ export default async function PartnerPage() {
 
   const partnerResult = await supabase
     .from("partners")
-    .select("id, user_id, name, photo_url, relationship_start_date")
+    .select("id, user_id, name, photo_url, relationship_start_date, bio")
     .eq("user_id", user.id)
     .maybeSingle();
 
   const partner = partnerResult.error ? null : partnerResult.data;
 
-  return (
-    <ProfileClient
-      userEmail={user.email ?? "unknown@example.com"}
-      partner={partner}
-    />
-  );
+  return <ProfileClient partner={partner} />;
 }
 

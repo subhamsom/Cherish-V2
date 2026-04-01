@@ -100,8 +100,7 @@ export default async function HomePage() {
         .select("id, title, content, type, tags, liked, pinned, audio_url, image_url, memory_date, created_at")
         .eq("partner_id", partner.id)
         .order("memory_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(20),
+        .order("created_at", { ascending: false }),
       "fetchMemories",
     );
     const { data, error } = memoryResult as {

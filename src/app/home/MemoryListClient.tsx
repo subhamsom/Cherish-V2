@@ -1667,6 +1667,17 @@ export default function MemoryListClient({
                 <input
                   value={customTagsInput}
                   onChange={(event) => setCustomTagsInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    const trimmed = event.currentTarget.value.trim();
+                    if (!trimmed) return;
+                    setCustomTagsInput((prev) => {
+                      const normalized = prev.trim();
+                      if (!normalized) return "";
+                      return normalized.endsWith(",") ? `${normalized} ` : `${normalized}, `;
+                    });
+                  }}
                   placeholder="Add your own tags, comma separated"
                   style={{
                     border: "1px solid rgba(0,0,0,0.12)",
@@ -2234,6 +2245,17 @@ export default function MemoryListClient({
                 <input
                   value={editCustomTagsInput}
                   onChange={(event) => setEditCustomTagsInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    const trimmed = event.currentTarget.value.trim();
+                    if (!trimmed) return;
+                    setEditCustomTagsInput((prev) => {
+                      const normalized = prev.trim();
+                      if (!normalized) return "";
+                      return normalized.endsWith(",") ? `${normalized} ` : `${normalized}, `;
+                    });
+                  }}
                   placeholder="Add your own tags, comma separated"
                   style={{
                     border: "1px solid rgba(0,0,0,0.12)",

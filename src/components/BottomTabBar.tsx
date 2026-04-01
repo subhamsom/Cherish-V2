@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Home, User } from "lucide-react";
+import { Bell, Home, Settings, User } from "lucide-react";
 
 type NavItem = {
   href: string;
@@ -29,6 +29,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Partner",
     Icon: User,
     matches: (pathname) => pathname.startsWith("/partner") || pathname.startsWith("/profile"),
+  },
+  {
+    href: "/settings",
+    label: "Settings",
+    Icon: Settings,
+    matches: (pathname) => pathname.startsWith("/settings"),
   },
 ];
 
