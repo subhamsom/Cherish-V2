@@ -29,6 +29,28 @@ const PRESET_TAGS = [
 type MemoryType = (typeof MEMORY_TYPES)[number]["value"];
 type PresetTag = (typeof PRESET_TAGS)[number];
 
+function autoTitleFromText(raw: string): string {
+  const text = raw.trim();
+  if (!text) return "";
+  const dotIndex = text.indexOf(".");
+  const base =
+    dotIndex === -1 ? text.slice(0, 60) : text.slice(0, Math.min(dotIndex + 1, 60));
+  return base.length < text.length && base.length === 60 ? `${base}…` : base;
+}
+
+function inferTypeFromContext(
+  hasVoice: boolean,
+  hasPhoto: boolean,
+  tags: string[],
+): MemoryType {
+  if (hasVoice) return "voice";
+  if (hasPhoto) return "photo";
+  const lower = tags.map((t) => t.toLowerCase());
+  if (lower.includes("gift")) return "gift";
+  if (lower.includes("occasion")) return "occasion";
+  return "text";
+}
+
 type Memory = {
   id: string;
   title: string | null;
@@ -101,13 +123,7 @@ export default function EditMemoryPage() {
     e.preventDefault();
     setError(null);
 
-    const trimmedTitle = title.trim();
     const trimmedDetails = details.trim();
-
-    if (!trimmedTitle) {
-      setError("Title is required.");
-      return;
-    }
 
     const md = memoryDate.trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(md)) {
@@ -123,9 +139,9 @@ export default function EditMemoryPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: trimmedTitle,
+          title: autoTitleFromText(trimmedDetails || title),
           details: trimmedDetails ? trimmedDetails : null,
-          type,
+          type: inferTypeFromContext(false, false, tags),
           tags: tags.length ? tags : null,
           memory_date: md,
         }),

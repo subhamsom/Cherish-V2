@@ -105,6 +105,28 @@ const FILTER_OPTIONS: Array<{ value: MemoryFilter; label: string }> = [
   { value: "occasion", label: "Occasion" },
 ];
 
+function autoTitleFromText(raw: string): string {
+  const text = raw.trim();
+  if (!text) return "";
+  const dotIndex = text.indexOf(".");
+  const base =
+    dotIndex === -1 ? text.slice(0, 60) : text.slice(0, Math.min(dotIndex + 1, 60));
+  return base.length < text.length && base.length === 60 ? `${base}…` : base;
+}
+
+function inferMemoryTypeFromContext(
+  hasVoice: boolean,
+  hasPhoto: boolean,
+  allTags: string[],
+): MemoryType {
+  if (hasVoice) return "voice";
+  if (hasPhoto) return "photo";
+  const lowerTags = allTags.map((t) => t.toLowerCase());
+  if (lowerTags.includes("gift")) return "gift";
+  if (lowerTags.includes("occasion")) return "occasion";
+  return "text";
+}
+
 export default function MemoryListClient({
   initialMemories,
 }: {
@@ -604,10 +626,9 @@ export default function MemoryListClient({
 
   async function createMemory() {
     setAddError(null);
-    const trimmedTitle = addTitle.trim();
     const trimmedDetails = addDetails.trim();
-    if (!trimmedTitle) {
-      setAddError("Title is required.");
+    if (!trimmedDetails) {
+      setAddError("Please write something about this memory.");
       return;
     }
     const md = addMemoryDate.trim();
@@ -615,36 +636,50 @@ export default function MemoryListClient({
       setAddError("Please choose a valid date.");
       return;
     }
-    if (addType === "photo" && !photoFile) {
+    const mergedTags = Array.from(
+      new Set([...addTags, ...parseCustomTags(customTagsInput)]),
+    );
+
+    const hasVoice = Boolean(recordedAudioBlob);
+    const hasPhoto = Boolean(photoFile);
+    const inferredType = inferMemoryTypeFromContext(
+      hasVoice,
+      hasPhoto,
+      mergedTags,
+    );
+
+    if (inferredType === "photo" && !photoFile) {
       setAddError("Please choose an image for your photo memory.");
       return;
     }
-    if (addType === "voice" && recordingBusy) {
+    if (recordingBusy) {
       setAddError("Please stop recording before saving.");
       return;
     }
-    if (addType === "voice" && recordingInterrupted) {
+    if (inferredType === "voice" && recordingInterrupted) {
       setAddError("Microphone access was lost. Please try again.");
       return;
     }
-    if (addType === "voice" && !recordedAudioBlob) {
+    if (inferredType === "voice" && !recordedAudioBlob) {
       setAddError("Please record your voice memory before saving.");
+      return;
+    }
+
+    const autoTitle = autoTitleFromText(trimmedDetails);
+    if (!autoTitle) {
+      setAddError("Please write something about this memory.");
       return;
     }
 
     setAddSubmitting(true);
     try {
-      const mergedTags = Array.from(
-        new Set([...addTags, ...parseCustomTags(customTagsInput)]),
-      );
-
       const res = await fetch("/api/memories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: trimmedTitle,
+          title: autoTitle,
           details: trimmedDetails || null,
-          type: addType,
+          type: inferredType,
           tags: mergedTags.length ? mergedTags : null,
           memory_date: md,
         }),
@@ -655,12 +690,12 @@ export default function MemoryListClient({
         return;
       }
       const createdMemoryId = (json.memory?.id as string | undefined) ?? null;
-      if (addType === "voice" && !createdMemoryId) {
+      if (inferredType === "voice" && !createdMemoryId) {
         setAddError("Memory was created, but no ID was returned for audio upload.");
         return;
       }
 
-      if (addType === "voice" && recordedAudioBlob && createdMemoryId) {
+      if (inferredType === "voice" && recordedAudioBlob && createdMemoryId) {
         const {
           data: { user },
           error: userError,
@@ -714,7 +749,7 @@ export default function MemoryListClient({
         }
       }
 
-      if (addType === "photo" && photoFile && createdMemoryId) {
+      if (inferredType === "photo" && photoFile && createdMemoryId) {
         const uploadForm = new FormData();
         uploadForm.append("file", photoFile);
         uploadForm.append("type", "memory");
@@ -808,29 +843,18 @@ export default function MemoryListClient({
 
   async function saveEditedMemory() {
     if (!editMemoryId) return;
-    const trimmedTitle = editTitle.trim();
     const trimmedDetails = editDetails.trim();
 
+    if (!trimmedDetails) {
+      setEditError("Please write something about this memory.");
+      return;
+    }
     if (editType === "voice" && recordingBusy) {
       setEditError("Please stop recording before saving.");
       return;
     }
-
     if (editType === "voice" && recordingInterrupted) {
       setEditError("Microphone access was lost. Please try again.");
-      return;
-    }
-
-    if (!trimmedTitle) {
-      setEditError("Title is required.");
-      return;
-    }
-    if (editType === "voice" && !editAudioPath && !editVoiceFile) {
-      setEditError("Please add an audio file for voice memory.");
-      return;
-    }
-    if (editType === "photo" && !editImagePath && !editPhotoFile) {
-      setEditError("Please add an image for photo memory.");
       return;
     }
 
@@ -846,13 +870,36 @@ export default function MemoryListClient({
       const mergedTags = Array.from(
         new Set([...editTags, ...parseCustomTags(editCustomTagsInput)]),
       );
+      const hasVoice = Boolean(editVoiceFile || editAudioPath);
+      const hasPhoto = Boolean(editPhotoFile || editImagePath);
+      const inferredType = inferMemoryTypeFromContext(
+        hasVoice,
+        hasPhoto,
+        mergedTags,
+      );
+
+      if (inferredType === "voice" && !hasVoice) {
+        setEditError("Please add an audio file for voice memory.");
+        return;
+      }
+      if (inferredType === "photo" && !hasPhoto) {
+        setEditError("Please add an image for photo memory.");
+        return;
+      }
+
+      const autoTitle = autoTitleFromText(trimmedDetails);
+      if (!autoTitle) {
+        setEditError("Please write something about this memory.");
+        return;
+      }
+
       const res = await fetch(`/api/memories/${editMemoryId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: trimmedTitle,
+          title: autoTitle,
           details: trimmedDetails || null,
-          type: editType,
+          type: inferredType,
           tags: mergedTags.length ? mergedTags : null,
           memory_date: resolvedMd,
         }),
@@ -866,7 +913,7 @@ export default function MemoryListClient({
       let nextAudioPath: string | null = editAudioPath;
       let nextImagePath: string | null = editImagePath;
 
-      if (editType === "voice") {
+      if (inferredType === "voice") {
         if (editVoiceFile) {
           const uploadForm = new FormData();
           uploadForm.append("file", editVoiceFile);
@@ -884,7 +931,7 @@ export default function MemoryListClient({
           nextAudioPath = uploadJson.path as string;
         }
         nextImagePath = null;
-      } else if (editType === "photo") {
+      } else if (inferredType === "photo") {
         if (editPhotoFile) {
           const uploadForm = new FormData();
           uploadForm.append("file", editPhotoFile);
@@ -931,9 +978,9 @@ export default function MemoryListClient({
           memory.id === editMemoryId
             ? {
                 ...memory,
-                title: (updated.title as string | null | undefined) ?? trimmedTitle,
-                content: (updated.content as string | undefined) ?? (trimmedDetails || trimmedTitle),
-                type: (updated.type as string | undefined) ?? editType,
+                title: (updated.title as string | null | undefined) ?? autoTitle,
+                content: (updated.content as string | undefined) ?? trimmedDetails,
+                type: (updated.type as string | undefined) ?? inferredType,
                 tags: (updated.tags as string[] | null | undefined) ?? (mergedTags.length ? mergedTags : null),
                 audio_url: nextAudioPath,
                 image_url: nextImagePath,
@@ -946,9 +993,9 @@ export default function MemoryListClient({
         prev?.id === editMemoryId
           ? {
               ...prev,
-              title: (updated.title as string | null | undefined) ?? trimmedTitle,
-              content: (updated.content as string | undefined) ?? (trimmedDetails || trimmedTitle),
-              type: (updated.type as string | undefined) ?? editType,
+              title: (updated.title as string | null | undefined) ?? autoTitle,
+              content: (updated.content as string | undefined) ?? trimmedDetails,
+              type: (updated.type as string | undefined) ?? inferredType,
               tags: (updated.tags as string[] | null | undefined) ?? (mergedTags.length ? mergedTags : null),
               audio_url: nextAudioPath,
               image_url: nextImagePath,
