@@ -29,25 +29,54 @@ function displayMemoryDateLabel(memory: Memory): string {
   return "";
 }
 
-const CARD_TITLE_MAX_CHARS = 50;
+const CARD_TITLE_DISPLAY_MAX = 60;
+const CARD_EXCERPT_MAX_CHARS = 150;
 
-function truncateCardTitle(title: string): string {
-  if (title.length <= CARD_TITLE_MAX_CHARS) return title;
-  return `${title.slice(0, CARD_TITLE_MAX_CHARS)}\u2026`;
+function trimNorm(s: string | null | undefined): string {
+  return (s ?? "").trim();
 }
 
-/** Title + optional description for text cards (avoid duplicating title when content is only the fallback). */
-function textMemoryCardFields(memory: Memory): { headline: string; descriptionPreview: string | null } {
-  const rawTitle = (memory.title ?? "").trim();
-  const rawContent = (memory.content ?? "").trim();
-  const headline = rawTitle || rawContent;
-  if (!rawTitle) {
-    return { headline, descriptionPreview: null };
+/**
+ * Text to show as description (card excerpt, detail body, edit pre-fill).
+ * Never mixes title into this string: skips title-only `content` rows and strips a leading
+ * line when it exactly matches the stored title (so the description area does not repeat the headline).
+ */
+function memoryDescriptionBody(memory: Memory): string | null {
+  const title = trimNorm(memory.title);
+  const raw = memory.content ?? "";
+  const contentNorm = raw.trim();
+  if (!contentNorm) return null;
+  if (contentNorm === title) return null;
+
+  if (!title) {
+    return raw;
   }
-  if (!rawContent || rawContent === rawTitle) {
-    return { headline, descriptionPreview: null };
+
+  const lines = raw.split(/\r?\n/);
+  const firstLineTrimmed = lines[0]?.trim() ?? "";
+  if (firstLineTrimmed === title) {
+    const rest = lines.slice(1).join("\n").replace(/^\r?\n+/, "");
+    const restTrim = rest.trim();
+    if (!restTrim || restTrim === title) return null;
+    return rest;
   }
-  return { headline, descriptionPreview: (memory.content ?? "").trim() };
+
+  return raw;
+}
+
+/** Card heading: stored `title` only — never `content`. */
+function formatCardTitleDisplay(memory: Memory): string {
+  const t = trimNorm(memory.title);
+  if (t.length <= CARD_TITLE_DISPLAY_MAX) return t;
+  return `${t.slice(0, CARD_TITLE_DISPLAY_MAX)}…`;
+}
+
+/** Card excerpt from description body only; max 150 chars + ellipsis. */
+function formatCardExcerpt(memory: Memory): string | null {
+  const body = memoryDescriptionBody(memory);
+  if (body === null) return null;
+  if (body.length <= CARD_EXCERPT_MAX_CHARS) return body;
+  return `${body.slice(0, CARD_EXCERPT_MAX_CHARS)}…`;
 }
 
 const MAX_TAGS_ON_CARD = 3;
@@ -104,15 +133,6 @@ const FILTER_OPTIONS: Array<{ value: MemoryFilter; label: string }> = [
   { value: "gift", label: "Gift" },
   { value: "occasion", label: "Occasion" },
 ];
-
-function autoTitleFromText(raw: string): string {
-  const text = raw.trim();
-  if (!text) return "";
-  const dotIndex = text.indexOf(".");
-  const base =
-    dotIndex === -1 ? text.slice(0, 60) : text.slice(0, Math.min(dotIndex + 1, 60));
-  return base.length < text.length && base.length === 60 ? `${base}…` : base;
-}
 
 function inferMemoryTypeFromContext(
   hasVoice: boolean,
@@ -340,19 +360,13 @@ export default function MemoryListClient({
     );
 
     setEditMemoryId(memory.id);
-    const resolvedTitle = memory.title ?? memory.content;
-    const rawTitle = (memory.title ?? "").trim();
-    const rawContent = (memory.content ?? "").trim();
-    const isTextLike = memory.type === "text" || memory.type === "gift" || memory.type === "occasion";
-    const resolvedDetailsForEdit =
-      isTextLike && rawTitle && rawContent === rawTitle ? "" : (memory.content ?? "");
 
-    setEditTitle(resolvedTitle);
+    setEditTitle(memory.title ?? "");
+    setEditDetails(memoryDescriptionBody(memory) ?? "");
     setEditMemoryDate(
       memory.memory_date?.trim() ||
         (memory.created_at ? isoDateFromCreatedAt(memory.created_at) : todayIsoDateLocal()),
     );
-    setEditDetails(resolvedDetailsForEdit);
     setEditType((memory.type as MemoryType) ?? "text");
     setEditTags(preset);
     setEditCustomTagsInput(custom.join(", "));
@@ -626,11 +640,12 @@ export default function MemoryListClient({
 
   async function createMemory() {
     setAddError(null);
-    const trimmedDetails = addDetails.trim();
-    if (!trimmedDetails) {
-      setAddError("Please write something about this memory.");
+    const trimmedTitle = addTitle.trim();
+    if (!trimmedTitle) {
+      setAddError("Please add a title for this memory.");
       return;
     }
+    const trimmedDetails = addDetails.trim();
     const md = addMemoryDate.trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(md)) {
       setAddError("Please choose a valid date.");
@@ -665,19 +680,13 @@ export default function MemoryListClient({
       return;
     }
 
-    const autoTitle = autoTitleFromText(trimmedDetails);
-    if (!autoTitle) {
-      setAddError("Please write something about this memory.");
-      return;
-    }
-
     setAddSubmitting(true);
     try {
       const res = await fetch("/api/memories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: autoTitle,
+          title: trimmedTitle,
           details: trimmedDetails || null,
           type: inferredType,
           tags: mergedTags.length ? mergedTags : null,
@@ -843,12 +852,12 @@ export default function MemoryListClient({
 
   async function saveEditedMemory() {
     if (!editMemoryId) return;
-    const trimmedDetails = editDetails.trim();
-
-    if (!trimmedDetails) {
-      setEditError("Please write something about this memory.");
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle) {
+      setEditError("Please add a title for this memory.");
       return;
     }
+    const trimmedDetails = editDetails.trim();
     if (editType === "voice" && recordingBusy) {
       setEditError("Please stop recording before saving.");
       return;
@@ -887,17 +896,11 @@ export default function MemoryListClient({
         return;
       }
 
-      const autoTitle = autoTitleFromText(trimmedDetails);
-      if (!autoTitle) {
-        setEditError("Please write something about this memory.");
-        return;
-      }
-
       const res = await fetch(`/api/memories/${editMemoryId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: autoTitle,
+          title: trimmedTitle,
           details: trimmedDetails || null,
           type: inferredType,
           tags: mergedTags.length ? mergedTags : null,
@@ -973,13 +976,16 @@ export default function MemoryListClient({
         (mediaJson.memory as { memory_date?: string } | undefined)?.memory_date ??
         (updated.memory_date as string | undefined) ??
         resolvedMd;
+      const resolvedContent =
+        (updated.content as string | undefined) ?? (trimmedDetails || trimmedTitle);
+
       setMemories((prev) =>
         prev.map((memory) =>
           memory.id === editMemoryId
             ? {
                 ...memory,
-                title: (updated.title as string | null | undefined) ?? autoTitle,
-                content: (updated.content as string | undefined) ?? trimmedDetails,
+                title: (updated.title as string | null | undefined) ?? trimmedTitle,
+                content: resolvedContent,
                 type: (updated.type as string | undefined) ?? inferredType,
                 tags: (updated.tags as string[] | null | undefined) ?? (mergedTags.length ? mergedTags : null),
                 audio_url: nextAudioPath,
@@ -993,8 +999,8 @@ export default function MemoryListClient({
         prev?.id === editMemoryId
           ? {
               ...prev,
-              title: (updated.title as string | null | undefined) ?? autoTitle,
-              content: (updated.content as string | undefined) ?? trimmedDetails,
+              title: (updated.title as string | null | undefined) ?? trimmedTitle,
+              content: resolvedContent,
               type: (updated.type as string | undefined) ?? inferredType,
               tags: (updated.tags as string[] | null | undefined) ?? (mergedTags.length ? mergedTags : null),
               audio_url: nextAudioPath,
@@ -1296,13 +1302,9 @@ export default function MemoryListClient({
           {filteredMemories.map((memory) => {
             const selected = selectedIds.has(memory.id);
             const isText = memory.type === "text";
-            const { headline, descriptionPreview } = isText
-              ? textMemoryCardFields(memory)
-              : { headline: memory.title ?? memory.content, descriptionPreview: null as string | null };
-            const rawTitle = (memory.title ?? "").trim();
-            const rawContent = (memory.content ?? "").trim();
-            const hasDescription = rawContent && (!rawTitle || rawContent !== rawTitle);
-            const cardTitleDisplay = truncateCardTitle(headline);
+            const fullTitleTrimmed = (memory.title ?? "").trim();
+            const cardTitleDisplay = formatCardTitleDisplay(memory);
+            const cardExcerpt = formatCardExcerpt(memory);
             const memoryDateLabel = displayMemoryDateLabel(memory);
             const cardTags = (memory.tags ?? [])
               .map((t) => String(t).trim())
@@ -1365,7 +1367,9 @@ export default function MemoryListClient({
                     <strong
                       className="min-w-0 max-w-full break-words"
                       style={{ fontWeight: 700, display: "block" }}
-                      title={headline.length > CARD_TITLE_MAX_CHARS ? headline : undefined}
+                      title={
+                        fullTitleTrimmed.length > CARD_TITLE_DISPLAY_MAX ? fullTitleTrimmed : undefined
+                      }
                     >
                       {cardTitleDisplay}
                     </strong>
@@ -1421,22 +1425,14 @@ export default function MemoryListClient({
                     <span style={{ fontSize: 12, opacity: 0.75 }}>{memoryDateLabel}</span>
                   </div>
                 </div>
-                {isText ? (
-                  descriptionPreview ? (
-                    <p
-                      className="line-clamp-2 break-words whitespace-pre-line"
-                      style={{ fontSize: 14, opacity: 0.8, marginTop: 6, marginBottom: 0 }}
-                    >
-                      {descriptionPreview}
-                    </p>
-                  ) : null
-                ) : (
-                  hasDescription ? (
-                    <p style={{ fontSize: 14, opacity: 0.8, marginTop: 6 }}>
-                      {memory.content}
-                    </p>
-                  ) : null
-                )}
+                {cardExcerpt ? (
+                  <p
+                    className="break-words whitespace-pre-wrap"
+                    style={{ fontSize: 14, opacity: 0.8, marginTop: 6, marginBottom: 0 }}
+                  >
+                    {cardExcerpt}
+                  </p>
+                ) : null}
                 {cardTags.length ? (
                   <div
                     style={{
@@ -1472,7 +1468,7 @@ export default function MemoryListClient({
                     ) : null}
                   </div>
                 ) : null}
-                {!isText || descriptionPreview ? (
+                {!isText || cardExcerpt ? (
                   <div style={{ marginTop: 8 }}>
                     <TypeBadge type={memory.type} />
                   </div>
@@ -1920,14 +1916,13 @@ export default function MemoryListClient({
             onClick={(event) => event.stopPropagation()}
           >
             {(() => {
-              const detailTitle = (detailMemory.title ?? "").trim();
-              const detailContent = (detailMemory.content ?? "").trim();
-              const detailHasDescription = detailContent && (!detailTitle || detailContent !== detailTitle);
+              const detailTitleDisplay = trimNorm(detailMemory.title);
+              const detailDescriptionBody = memoryDescriptionBody(detailMemory);
               return (
                 <>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
               <h3 style={{ margin: 0, fontSize: 24, lineHeight: 1.2 }}>
-                {detailMemory.title ?? detailMemory.content}
+                {detailTitleDisplay}
               </h3>
               <div style={{ position: "relative", display: "flex", gap: 8 }}>
                 <button
@@ -2034,8 +2029,8 @@ export default function MemoryListClient({
               </div>
             </div>
 
-            {detailHasDescription ? (
-              <p style={{ marginTop: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{detailMemory.content}</p>
+            {detailDescriptionBody ? (
+              <p style={{ marginTop: 12, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{detailDescriptionBody}</p>
             ) : null}
 
             <div style={{ marginTop: 12 }}>
