@@ -29,7 +29,7 @@ function displayMemoryDateLabel(memory: Memory): string {
   return "";
 }
 
-const CARD_TITLE_DISPLAY_MAX = 60;
+const CARD_TITLE_DISPLAY_MAX = 30;
 const CARD_EXCERPT_MAX_CHARS = 150;
 
 function trimNorm(s: string | null | undefined): string {
