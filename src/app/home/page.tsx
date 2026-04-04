@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Settings } from "lucide-react";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
 import MemoryListClient from "./MemoryListClient";
 
@@ -137,15 +135,6 @@ export default async function HomePage() {
 
   return (
     <main className="p-4">
-      <header className="mb-3 flex items-center justify-end md:hidden">
-        <Link
-          href="/settings"
-          className="inline-flex rounded-lg border border-zinc-200 p-2 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
-          aria-label="Settings"
-        >
-          <Settings size={16} />
-        </Link>
-      </header>
       <MemoryListClient initialMemories={memories ?? []} />
     </main>
   );

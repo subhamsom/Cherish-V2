@@ -11,9 +11,15 @@ import {
   Plus,
   Trash2,
   Pencil,
-  Settings,
+  User,
   X,
 } from "lucide-react";
+
+function emitRemindersChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("cherish-reminders-changed"));
+  }
+}
 
 type Reminder = {
   id: string;
@@ -415,6 +421,7 @@ export default function RemindersPage() {
     );
     setDetailReminder(null);
     setDetailMenuOpen(false);
+    emitRemindersChanged();
   }
 
   async function deleteReminder(id: string) {
@@ -425,6 +432,7 @@ export default function RemindersPage() {
     setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
     setDetailReminder((prev) => (prev?.id === id ? null : prev));
     setDetailMenuOpen(false);
+    emitRemindersChanged();
   }
 
   async function submitReminderForm(payload: {
@@ -455,6 +463,7 @@ export default function RemindersPage() {
       setDetailReminder(null);
       setDetailMenuOpen(false);
       await loadReminders();
+      emitRemindersChanged();
     } finally {
       setFormSubmitting(false);
     }
@@ -496,11 +505,11 @@ export default function RemindersPage() {
               </button>
             </div>
             <Link
-              href="/settings"
+              href="/account"
               className="rounded-xl border border-zinc-200 p-2.5 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300 md:hidden"
-              aria-label="Settings"
+              aria-label="Account"
             >
-              <Settings size={18} />
+              <User size={18} />
             </Link>
 
             <button

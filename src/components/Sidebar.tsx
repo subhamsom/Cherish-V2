@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Home, Settings, User } from "lucide-react";
+import { Bell, Home, User } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 
@@ -61,52 +61,46 @@ export default function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-black md:block">
       <div className="flex h-full flex-col">
-      <div className="px-6 py-6">
-        <p className="text-xl font-semibold tracking-tight">Cherish</p>
-      </div>
-      <nav className="px-3">
-        <ul className="space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const active = item.matches(pathname);
-            const Icon = item.Icon;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={[
-                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
-                    active
-                      ? "bg-black text-white dark:bg-white dark:text-black"
-                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900",
-                  ].join(" ")}
-                >
-                  <Icon size={18} />
-                  <span>{item.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-      <div className="mt-auto border-t border-zinc-200 p-3 dark:border-zinc-800">
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-700">
-          <div className="min-w-0 flex items-center gap-2">
-            <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-medium dark:bg-zinc-800">
-              {initial}
-            </div>
-            <span className="truncate text-sm">{displayName}</span>
-          </div>
+        <div className="px-6 py-6">
+          <p className="text-xl font-semibold tracking-tight">Cherish</p>
+        </div>
+        <nav className="px-3">
+          <ul className="space-y-1">
+            {NAV_ITEMS.map((item) => {
+              const active = item.matches(pathname);
+              const Icon = item.Icon;
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={[
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                      active
+                        ? "bg-black text-white dark:bg-white dark:text-black"
+                        : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900",
+                    ].join(" ")}
+                  >
+                    <Icon size={18} />
+                    <span>{item.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+        <div className="mt-auto border-t border-zinc-200 p-3 dark:border-zinc-800">
           <Link
-            href="/settings"
-            className="rounded-lg border border-zinc-200 p-1.5 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            aria-label="Settings"
+            href="/account"
+            className="flex items-center justify-center rounded-xl p-2 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            aria-label="Account"
+            title={displayName}
           >
-            <Settings size={16} />
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-medium dark:bg-zinc-800">
+              {initial}
+            </span>
           </Link>
         </div>
-      </div>
       </div>
     </aside>
   );
 }
-

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MemoryFABContext } from "@/components/MemoryFABBridge";
 import Image from "next/image";
 import { Camera, Calendar, Gift, Heart, Mic, MoreVertical, Pin, Plus, Trash2, Type, X } from "lucide-react";
 import { formatMemoryDate, isoDateFromCreatedAt, todayIsoDateLocal } from "@/lib/formatDate";
@@ -153,6 +154,7 @@ export default function MemoryListClient({
   initialMemories: Memory[];
 }) {
   const router = useRouter();
+  const memoryFab = useContext(MemoryFABContext);
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [memories, setMemories] = useState<Memory[]>(initialMemories);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -231,6 +233,13 @@ export default function MemoryListClient({
   useEffect(() => {
     setMemories(initialMemories);
   }, [initialMemories]);
+
+  useEffect(() => {
+    if (!memoryFab) return undefined;
+    return memoryFab.registerOpenAddMemory(() => {
+      setAddOpen(true);
+    });
+  }, [memoryFab]);
 
   const filteredMemories = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
