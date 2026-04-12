@@ -12,7 +12,10 @@ import { ScrollChromeProvider } from "@/components/ScrollChromeProvider";
 
 export default function AppNavigationShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const hideNav = pathname === "/" || pathname.startsWith("/onboarding");
+  const hideNav =
+    pathname === "/" ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/preview/");
 
   if (hideNav) {
     return <>{children}</>;

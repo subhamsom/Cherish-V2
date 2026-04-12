@@ -51,8 +51,8 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    // Landing page is public; everything else requires auth.
-    if (pathname === "/") {
+    // Landing + static UI previews are public; everything else requires auth.
+    if (pathname === "/" || pathname.startsWith("/preview/")) {
       return NextResponse.next();
     }
 
