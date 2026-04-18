@@ -14,6 +14,7 @@ export default function AppNavigationShell({ children }: { children: ReactNode }
   const pathname = usePathname();
   const hideNav =
     pathname === "/" ||
+    pathname === "/home" ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/preview/");
 

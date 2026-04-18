@@ -10,6 +10,7 @@ import {
   User,
   UserRound,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { MobileHomeFeedMemory } from "@/lib/mobileHomeFeedFromDb";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
@@ -270,13 +271,25 @@ export type MobileHomeMockProps = {
   weeklyStats?: { total: number; voice: number; photo: number };
   /** Explains that the list is real account data (helps avoid confusing preview with production UI). */
   liveDataBanner?: boolean;
+  /** When true, profile, FAB, and bottom tabs navigate to real app routes (use on /home and signed-in preview). */
+  appNavigation?: boolean;
 };
+
+const profileBtnClass =
+  "flex size-11 items-center justify-center rounded-full bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2";
+
+const fabClass =
+  "absolute bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-20 flex size-14 items-center justify-center rounded-2xl bg-[#FF6B6C] text-white shadow-[0_12px_32px_rgb(255_107_108_/_0.4)] transition-transform hover:-translate-y-0.5 hover:bg-[#E85E5F] active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6B6C]";
+
+const navInactiveClass =
+  "flex flex-1 flex-col items-center gap-1 py-3 text-zinc-400 transition-colors hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2";
 
 export default function MobileHomeMock({
   memoriesFromDb,
   greetingName = "Sam",
   weeklyStats,
   liveDataBanner = false,
+  appNavigation = false,
 }: MobileHomeMockProps = {}) {
   const feed = memoriesFromDb ?? DEMO_FEED;
   const [filter, setFilter] = useState<FilterId>("all");
@@ -312,14 +325,25 @@ export default function MobileHomeMock({
 
         {/* Header */}
         <header className="relative z-10 flex items-center justify-between px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
-          <button
-            type="button"
-            aria-label="Open profile"
-            className="flex size-11 items-center justify-center rounded-full bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ outlineColor: ACCENT }}
-          >
-            <UserRound className="size-6 text-zinc-700" strokeWidth={1.75} aria-hidden />
-          </button>
+          {appNavigation ? (
+            <Link
+              href="/profile"
+              aria-label="Open profile"
+              className={profileBtnClass}
+              style={{ outlineColor: ACCENT }}
+            >
+              <UserRound className="size-6 text-zinc-700" strokeWidth={1.75} aria-hidden />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              aria-label="Open profile"
+              className={profileBtnClass}
+              style={{ outlineColor: ACCENT }}
+            >
+              <UserRound className="size-6 text-zinc-700" strokeWidth={1.75} aria-hidden />
+            </button>
+          )}
           <p className="text-sm font-semibold tracking-tight text-zinc-800">
             Memories
           </p>
@@ -552,13 +576,19 @@ export default function MobileHomeMock({
           </section>
         </div>
 
-        <button
-          type="button"
-          aria-label="Add memory"
-          className="absolute bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-20 flex size-14 items-center justify-center rounded-2xl bg-[#FF6B6C] text-white shadow-[0_12px_32px_rgb(255_107_108_/_0.4)] transition-transform hover:-translate-y-0.5 hover:bg-[#E85E5F] active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6B6C]"
-        >
-          <Plus className="size-7" strokeWidth={2.5} aria-hidden />
-        </button>
+        {appNavigation ? (
+          <Link
+            href="/memories/new"
+            aria-label="Add memory"
+            className={fabClass}
+          >
+            <Plus className="size-7" strokeWidth={2.5} aria-hidden />
+          </Link>
+        ) : (
+          <button type="button" aria-label="Add memory" className={fabClass}>
+            <Plus className="size-7" strokeWidth={2.5} aria-hidden />
+          </button>
+        )}
 
         <nav
           className="absolute bottom-0 left-0 right-0 z-20 bg-white/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgb(24_24_27_/_0.08)] backdrop-blur-xl"
@@ -573,24 +603,46 @@ export default function MobileHomeMock({
               </span>
             </li>
             <li className="flex flex-1">
-              <button
-                type="button"
-                className="flex flex-1 flex-col items-center gap-1 py-3 text-zinc-400 transition-colors hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{ outlineColor: ACCENT }}
-              >
-                <Bell className="size-[22px]" strokeWidth={1.75} aria-hidden />
-                <span className="text-xs">Reminders</span>
-              </button>
+              {appNavigation ? (
+                <Link
+                  href="/reminders"
+                  className={`flex flex-1 ${navInactiveClass}`}
+                  style={{ outlineColor: ACCENT }}
+                >
+                  <Bell className="size-[22px]" strokeWidth={1.75} aria-hidden />
+                  <span className="text-xs">Reminders</span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className={`flex flex-1 ${navInactiveClass}`}
+                  style={{ outlineColor: ACCENT }}
+                >
+                  <Bell className="size-[22px]" strokeWidth={1.75} aria-hidden />
+                  <span className="text-xs">Reminders</span>
+                </button>
+              )}
             </li>
             <li className="flex flex-1">
-              <button
-                type="button"
-                className="flex flex-1 flex-col items-center gap-1 py-3 text-zinc-400 transition-colors hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{ outlineColor: ACCENT }}
-              >
-                <User className="size-[22px]" strokeWidth={1.75} aria-hidden />
-                <span className="text-xs">Partner</span>
-              </button>
+              {appNavigation ? (
+                <Link
+                  href="/partner"
+                  className={`flex flex-1 ${navInactiveClass}`}
+                  style={{ outlineColor: ACCENT }}
+                >
+                  <User className="size-[22px]" strokeWidth={1.75} aria-hidden />
+                  <span className="text-xs">Partner</span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className={`flex flex-1 ${navInactiveClass}`}
+                  style={{ outlineColor: ACCENT }}
+                >
+                  <User className="size-[22px]" strokeWidth={1.75} aria-hidden />
+                  <span className="text-xs">Partner</span>
+                </button>
+              )}
             </li>
           </ul>
         </nav>

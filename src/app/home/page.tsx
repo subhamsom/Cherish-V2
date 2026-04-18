@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
+import MobileHomeMock from "@/components/MobileHomeMock";
+import {
+  greetingFirstNameFromUser,
+  mapDbMemoriesToMobileHomeFeed,
+  weeklyActivityStats,
+} from "@/lib/mobileHomeFeedFromDb";
+import { loadPartnerMemoriesForUser } from "@/lib/loadPartnerMemories";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
-import MemoryListClient from "./MemoryListClient";
 
 export const dynamic = "force-dynamic";
 
@@ -39,104 +45,42 @@ export default async function HomePage() {
     redirect("/");
   }
 
-  console.time("[home] fetchPartner");
-  let partner: { id: string; name: string } | null = null;
-  try {
-    const partnerResult = await withTimeout(
-      supabase
-        .from("partners")
-        .select("id, name")
-        .eq("user_id", user.id)
-        .maybeSingle(),
-      "fetchPartner",
-    );
-    const { data, error } = partnerResult as {
-      data: { id: string; name: string } | null;
-      error: unknown;
-    };
+  const loaded = await loadPartnerMemoriesForUser(supabase, user.id);
 
-    if (error) {
-      throw error;
+  if (!loaded.ok) {
+    if (loaded.reason === "no_partner") {
+      redirect("/onboarding");
     }
-    partner = data;
-  } catch (error) {
-    console.timeEnd("[home] fetchPartner");
-    console.error("[home] fetchPartner failed:", error);
+    if (loaded.reason === "partner_fetch") {
+      console.error("[home] fetchPartner failed");
+      return (
+        <main className="flex min-h-dvh items-center justify-center p-4">
+          <p className="max-w-sm text-center text-sm text-zinc-600">
+            Could not load partner right now. Please refresh.
+          </p>
+        </main>
+      );
+    }
+    console.error("[home] fetchMemories failed");
     return (
-      <main>
-        <h1>Cherish</h1>
-        <p>Could not load partner right now. Please refresh.</p>
+      <main className="flex min-h-dvh items-center justify-center p-4">
+        <p className="max-w-sm text-center text-sm text-zinc-600">
+          Could not load memories right now. Please refresh.
+        </p>
       </main>
     );
   }
-  console.timeEnd("[home] fetchPartner");
 
-  if (!partner) {
-    redirect("/onboarding");
-  }
-
-  console.time("[home] fetchMemories");
-  let memories:
-    | Array<{
-        id: string;
-        title: string | null;
-        content: string;
-        type: string;
-        tags: string[] | null;
-        liked: boolean | null;
-        pinned: boolean | null;
-        audio_url: string | null;
-        image_url: string | null;
-        memory_date: string;
-        created_at: string | null;
-      }>
-    | null = null;
-  try {
-    const memoryResult = await withTimeout(
-      supabase
-        .from("memories")
-        .select("id, title, content, type, tags, liked, pinned, audio_url, image_url, memory_date, created_at")
-        .eq("partner_id", partner.id)
-        .order("memory_date", { ascending: false })
-        .order("created_at", { ascending: false }),
-      "fetchMemories",
-    );
-    const { data, error } = memoryResult as {
-      data: Array<{
-        id: string;
-        title: string | null;
-        content: string;
-        type: string;
-        tags: string[] | null;
-        liked: boolean | null;
-        pinned: boolean | null;
-        audio_url: string | null;
-        image_url: string | null;
-        memory_date: string;
-        created_at: string | null;
-      }> | null;
-      error: unknown;
-    };
-
-    if (error) {
-      throw error;
-    }
-    memories = data;
-  } catch (error) {
-    console.timeEnd("[home] fetchMemories");
-    console.error("[home] fetchMemories failed:", error);
-    return (
-      <main className="p-4">
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">Could not load memories right now. Please refresh.</p>
-      </main>
-    );
-  }
-  console.timeEnd("[home] fetchMemories");
+  const feed = mapDbMemoriesToMobileHomeFeed(loaded.rows);
+  const stats = weeklyActivityStats(loaded.rows);
+  const greetingName = greetingFirstNameFromUser(user);
 
   return (
-    <main className="p-4">
-      <MemoryListClient initialMemories={memories ?? []} />
-    </main>
+    <MobileHomeMock
+      memoriesFromDb={feed}
+      greetingName={greetingName}
+      weeklyStats={stats}
+      appNavigation
+    />
   );
 }
-

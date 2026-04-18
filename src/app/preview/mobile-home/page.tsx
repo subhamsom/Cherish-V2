@@ -4,8 +4,8 @@ import {
   greetingFirstNameFromUser,
   mapDbMemoriesToMobileHomeFeed,
   weeklyActivityStats,
-  type MobileHomeDbMemory,
 } from "@/lib/mobileHomeFeedFromDb";
+import { loadPartnerMemoriesForUser } from "@/lib/loadPartnerMemories";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -38,68 +38,23 @@ export default async function PreviewMobileHomePage() {
     return <MobileHomeMock />;
   }
 
-  let partner: { id: string; name: string } | null = null;
-  try {
-    const partnerResult = await withTimeout(
-      supabase
-        .from("partners")
-        .select("id, name")
-        .eq("user_id", user.id)
-        .maybeSingle(),
-      "fetchPartner",
-    );
-    const { data, error } = partnerResult as {
-      data: { id: string; name: string } | null;
-      error: unknown;
-    };
-    if (error) throw error;
-    partner = data;
-  } catch {
+  const loaded = await loadPartnerMemoriesForUser(supabase, user.id);
+
+  if (!loaded.ok) {
+    if (loaded.reason === "no_partner") {
+      redirect("/onboarding");
+    }
     return (
       <main className="flex min-h-dvh items-center justify-center bg-zinc-100 p-4">
         <p className="max-w-sm text-center text-sm text-zinc-600">
-          Could not load partner for this preview. Try again from Home after
-          onboarding.
+          Could not load data for this preview. Please refresh.
         </p>
       </main>
     );
   }
 
-  if (!partner) {
-    redirect("/onboarding");
-  }
-
-  let rows: MobileHomeDbMemory[] = [];
-  try {
-    const memoryResult = await withTimeout(
-      supabase
-        .from("memories")
-        .select(
-          "id, title, content, type, tags, liked, pinned, audio_url, image_url, memory_date, created_at",
-        )
-        .eq("partner_id", partner.id)
-        .order("memory_date", { ascending: false })
-        .order("created_at", { ascending: false }),
-      "fetchMemories",
-    );
-    const { data, error } = memoryResult as {
-      data: MobileHomeDbMemory[] | null;
-      error: unknown;
-    };
-    if (error) throw error;
-    rows = data ?? [];
-  } catch {
-    return (
-      <main className="flex min-h-dvh items-center justify-center bg-zinc-100 p-4">
-        <p className="max-w-sm text-center text-sm text-zinc-600">
-          Could not load memories for this preview. Please refresh.
-        </p>
-      </main>
-    );
-  }
-
-  const feed = mapDbMemoriesToMobileHomeFeed(rows);
-  const stats = weeklyActivityStats(rows);
+  const feed = mapDbMemoriesToMobileHomeFeed(loaded.rows);
+  const stats = weeklyActivityStats(loaded.rows);
   const greetingName = greetingFirstNameFromUser(user);
 
   return (
@@ -108,6 +63,7 @@ export default async function PreviewMobileHomePage() {
       greetingName={greetingName}
       weeklyStats={stats}
       liveDataBanner
+      appNavigation
     />
   );
 }
