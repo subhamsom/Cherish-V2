@@ -12,9 +12,15 @@ import { ScrollChromeProvider } from "@/components/ScrollChromeProvider";
 
 export default function AppNavigationShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const isFullScreenCaptureRoute =
+    pathname === "/memories/new" ||
+    pathname === "/reminders/new" ||
+    /^\/memories\/[^/]+\/edit$/.test(pathname) ||
+    /^\/reminders\/[^/]+\/edit$/.test(pathname);
   const hideNav =
     pathname === "/" ||
     pathname === "/home" ||
+    isFullScreenCaptureRoute ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/preview/");
 

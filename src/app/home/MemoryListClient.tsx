@@ -237,9 +237,9 @@ export default function MemoryListClient({
   useEffect(() => {
     if (!memoryFab) return undefined;
     return memoryFab.registerOpenAddMemory(() => {
-      setAddOpen(true);
+      router.push("/memories/new");
     });
-  }, [memoryFab]);
+  }, [memoryFab, router]);
 
   const filteredMemories = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -360,43 +360,9 @@ export default function MemoryListClient({
   }
 
   function openEditModal(memory: Memory) {
-    const memoryTags = memory.tags ?? [];
-    const preset = memoryTags.filter((tag): tag is PresetTag =>
-      (PRESET_TAGS as readonly string[]).includes(tag),
-    );
-    const custom = memoryTags.filter(
-      (tag) => !(PRESET_TAGS as readonly string[]).includes(tag),
-    );
-
-    setEditMemoryId(memory.id);
-
-    setEditTitle(memory.title ?? "");
-    setEditDetails(memoryDescriptionBody(memory) ?? "");
-    setEditMemoryDate(
-      memory.memory_date?.trim() ||
-        (memory.created_at ? isoDateFromCreatedAt(memory.created_at) : todayIsoDateLocal()),
-    );
-    setEditType((memory.type as MemoryType) ?? "text");
-    setEditTags(preset);
-    setEditCustomTagsInput(custom.join(", "));
-    setEditAudioPath(memory.audio_url ?? null);
-    setEditImagePath(memory.image_url ?? null);
-    setEditVoiceFile(null);
-    setEditPhotoFile(null);
-    setEditVoicePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    setEditReplaceVoice(false);
-    setEditVoicePlaybackUrl(null);
-    setEditVoicePlaybackError(null);
-    setEditPhotoPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    setEditError(null);
-    setEditOpen(true);
     setDetailMenuOpen(false);
+    setDetailMemory(null);
+    router.push(`/memories/${memory.id}/edit`);
   }
 
   function closeEditModal() {
@@ -1205,8 +1171,7 @@ export default function MemoryListClient({
         <button
           type="button"
           onClick={() => {
-            setAddMemoryDate(todayIsoDateLocal());
-            setAddOpen(true);
+            router.push("/memories/new");
           }}
           style={{
             display: "inline-flex",

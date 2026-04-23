@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDate } from "@/lib/formatDate";
 import {
@@ -10,7 +10,6 @@ import {
   MoreVertical,
   Plus,
   Trash2,
-  Pencil,
   User,
   X,
 } from "lucide-react";
@@ -41,21 +40,12 @@ type CalendarCell = {
 };
 
 type ReminderFilter = "all" | "due" | "upcoming" | "past";
-type ReminderFormMode = "create" | "edit";
 
 const FILTERS: Array<{ id: ReminderFilter; label: string }> = [
   { id: "all", label: "All" },
   { id: "due", label: "Due" },
   { id: "upcoming", label: "Upcoming" },
   { id: "past", label: "Past" },
-];
-
-const RECURRENCE_OPTIONS: Array<NonNullable<Reminder["recurrence"]>> = [
-  "none",
-  "daily",
-  "weekly",
-  "monthly",
-  "yearly",
 ];
 
 function toDateKey(date: Date) {
@@ -97,15 +87,6 @@ function buildCalendarGrid(month: Date): CalendarCell[] {
   return cells;
 }
 
-function parseTagsInput(value: string) {
-  return value
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((tag) => tag.toLowerCase())
-    .filter((tag, index, arr) => arr.indexOf(tag) === index);
-}
-
 function recurrenceLabel(recurrence: Reminder["recurrence"]) {
   if (!recurrence || recurrence === "none") return "Recurring";
   return `${recurrence[0].toUpperCase()}${recurrence.slice(1)}`;
@@ -122,176 +103,6 @@ function reminderStatus(reminder: Reminder, todayKey: string): "due" | "upcoming
   if (reminder.completed) return "past";
   if (reminder.date <= todayKey) return "due";
   return "upcoming";
-}
-
-function ReminderFormModal({
-  mode,
-  reminder,
-  open,
-  submitting,
-  onClose,
-  onSubmit,
-}: {
-  mode: ReminderFormMode;
-  reminder: Reminder | null;
-  open: boolean;
-  submitting: boolean;
-  onClose: () => void;
-  onSubmit: (payload: {
-    title: string;
-    date: string;
-    note: string;
-    tags: string[];
-    recurrence: NonNullable<Reminder["recurrence"]>;
-  }) => Promise<void>;
-}) {
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [note, setNote] = useState("");
-  const [tagsInput, setTagsInput] = useState("");
-  const [recurrence, setRecurrence] = useState<NonNullable<Reminder["recurrence"]>>("none");
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setError(null);
-    if (mode === "edit" && reminder) {
-      setTitle(reminder.title);
-      setDate(reminder.date);
-      setNote(reminder.note ?? "");
-      setTagsInput((reminder.tags ?? []).join(", "));
-      setRecurrence(reminder.recurrence ?? "none");
-      return;
-    }
-    setTitle("");
-    setDate("");
-    setNote("");
-    setTagsInput("");
-    setRecurrence("none");
-  }, [open, mode, reminder]);
-
-  if (!open) return null;
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) {
-      setError("Title is required.");
-      return;
-    }
-    if (!date) {
-      setError("Date is required.");
-      return;
-    }
-
-    await onSubmit({
-      title: trimmedTitle,
-      date,
-      note: note.trim(),
-      tags: parseTagsInput(tagsInput),
-      recurrence,
-    });
-  }
-
-  return (
-    <div className="fixed inset-0 z-40 bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="mx-auto mt-6 w-full max-w-xl rounded-2xl bg-white p-4 dark:bg-zinc-950 max-h-[92vh] overflow-y-auto"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{mode === "create" ? "Add Reminder" : "Edit Reminder"}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg border p-1.5">
-            <X size={16} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm">Title</span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="e.g. Mansi's birthday"
-              className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm">Date</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm">Note (optional)</span>
-            <textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Any details worth remembering..."
-              className="min-h-24 rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm">Tags (optional)</span>
-            <input
-              value={tagsInput}
-              onChange={(event) => setTagsInput(event.target.value)}
-              placeholder="e.g. birthday, gift, plan ahead"
-              className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
-            />
-          </label>
-
-          <div>
-            <p className="text-sm">Recurring</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {RECURRENCE_OPTIONS.map((option) => {
-                const active = recurrence === option;
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setRecurrence(option)}
-                    className={[
-                      "rounded-full border px-3 py-1.5 text-sm",
-                      active
-                        ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                        : "border-zinc-200 dark:border-zinc-800",
-                    ].join(" ")}
-                  >
-                    {option[0].toUpperCase()}
-                    {option.slice(1)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-xl bg-black px-4 py-2.5 text-white disabled:opacity-60 dark:bg-white dark:text-black"
-            >
-              {submitting ? "Saving..." : mode === "create" ? "Save reminder" : "Save changes"}
-            </button>
-            <button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5">
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
 }
 
 function ReminderCard({
@@ -362,9 +173,6 @@ export default function RemindersPage() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [detailReminder, setDetailReminder] = useState<Reminder | null>(null);
   const [detailMenuOpen, setDetailMenuOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<ReminderFormMode>("create");
-  const [formSubmitting, setFormSubmitting] = useState(false);
 
   async function loadReminders() {
     setLoading(true);
@@ -435,40 +243,6 @@ export default function RemindersPage() {
     emitRemindersChanged();
   }
 
-  async function submitReminderForm(payload: {
-    title: string;
-    date: string;
-    note: string;
-    tags: string[];
-    recurrence: NonNullable<Reminder["recurrence"]>;
-  }) {
-    setFormSubmitting(true);
-    try {
-      if (formMode === "create") {
-        const response = await fetch("/api/reminders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) return;
-      } else if (detailReminder) {
-        const response = await fetch(`/api/reminders/${detailReminder.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) return;
-      }
-      setFormOpen(false);
-      setDetailReminder(null);
-      setDetailMenuOpen(false);
-      await loadReminders();
-      emitRemindersChanged();
-    } finally {
-      setFormSubmitting(false);
-    }
-  }
-
   return (
     <main className="min-h-screen bg-white p-4 text-black dark:bg-black dark:text-zinc-50">
       <section className="mx-auto w-full max-w-xl">
@@ -512,18 +286,13 @@ export default function RemindersPage() {
               <User size={18} />
             </Link>
 
-            <button
-              type="button"
-              onClick={() => {
-                setFormMode("create");
-                setFormOpen(true);
-                setDetailMenuOpen(false);
-              }}
+            <Link
+              href="/reminders/new"
               className="rounded-xl bg-black p-2.5 text-white dark:bg-white dark:text-black"
               aria-label="Add reminder"
             >
               <Plus size={18} />
-            </button>
+            </Link>
           </div>
         </header>
 
@@ -687,18 +456,15 @@ export default function RemindersPage() {
 
                 {detailMenuOpen ? (
                   <div className="absolute right-0 top-11 z-10 min-w-36 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    <button
-                      type="button"
+                    <Link
+                      href={`/reminders/${detailReminder.id}/edit`}
                       onClick={() => {
                         setDetailMenuOpen(false);
-                        setFormMode("edit");
-                        setFormOpen(true);
                       }}
                       className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
-                      <Pencil size={14} />
                       Edit
-                    </button>
+                    </Link>
                     <button
                       type="button"
                       onClick={async () => {
@@ -765,18 +531,6 @@ export default function RemindersPage() {
           </div>
         </div>
       ) : null}
-
-      <ReminderFormModal
-        mode={formMode}
-        reminder={detailReminder}
-        open={formOpen}
-        submitting={formSubmitting}
-        onClose={() => {
-          setFormOpen(false);
-          setDetailMenuOpen(false);
-        }}
-        onSubmit={submitReminderForm}
-      />
 
       {selectedDateKey && view === "calendar" ? (
         <div className="fixed inset-0 z-30 bg-black/20" onClick={() => setSelectedDateKey(null)}>
