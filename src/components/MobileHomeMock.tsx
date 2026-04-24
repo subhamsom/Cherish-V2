@@ -11,7 +11,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { MobileHomeFeedMemory } from "@/lib/mobileHomeFeedFromDb";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 
@@ -293,6 +293,7 @@ export default function MobileHomeMock({
 }: MobileHomeMockProps = {}) {
   const feed = memoriesFromDb ?? DEMO_FEED;
   const [filter, setFilter] = useState<FilterId>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [liked, setLiked] = useState(() => buildInitialLiked(feed));
 
   const stats =
@@ -301,8 +302,18 @@ export default function MobileHomeMock({
       ? { total: 4, voice: 2, photo: 1 }
       : { total: 0, voice: 0, photo: 0 });
 
-  const visible =
-    filter === "all" ? feed : feed.filter((m) => m.kind === filter);
+  const visible = useMemo(() => {
+    const byKind =
+      filter === "all" ? feed : feed.filter((m) => m.kind === filter);
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return byKind;
+    return byKind.filter((m) => {
+      if (m.title.toLowerCase().includes(q)) return true;
+      if (m.excerpt?.toLowerCase().includes(q)) return true;
+      if (m.dateLabel.toLowerCase().includes(q)) return true;
+      return m.tags.some((t) => t.toLowerCase().includes(q));
+    });
+  }, [feed, filter, searchQuery]);
 
   return (
     <div className="flex min-h-dvh justify-center bg-zinc-100 max-md:bg-zinc-50">
@@ -400,6 +411,8 @@ export default function MobileHomeMock({
               type="search"
               placeholder="search memories"
               aria-label="Search memories"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="h-11 w-full rounded-[100px] border-0 bg-white pl-10 pr-4 text-[15px] text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B6C]/35"
             />
           </div>
@@ -457,7 +470,11 @@ export default function MobileHomeMock({
             </h2>
             {visible.length === 0 ? (
               <p className="rounded-2xl bg-white p-6 text-center text-sm text-zinc-500 shadow-sm">
-                Nothing for this filter yet.
+                {searchQuery.trim()
+                  ? "No memories match your search."
+                  : filter === "all"
+                    ? "No memories yet."
+                    : "Nothing for this filter yet."}
               </p>
             ) : (
               visible.map((memory) => {

@@ -39,7 +39,7 @@ export async function GET(request: Request) {
           .single();
 
         return NextResponse.redirect(
-          new URL(partner ? "/home" : "/onboarding", origin),
+          new URL(partner ? "/" : "/onboarding", origin),
         );
       }
     }
