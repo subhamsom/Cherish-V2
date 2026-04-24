@@ -51,8 +51,8 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    // Landing page is public; everything else requires auth.
-    if (pathname === "/") {
+    // Landing + static UI previews are public; everything else requires auth.
+    if (pathname === "/" || pathname.startsWith("/preview/")) {
       return NextResponse.next();
     }
 
@@ -109,6 +109,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|manifest.json|sw.js|workbox-.*|icons/).*)"],
 };
 

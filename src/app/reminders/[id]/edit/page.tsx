@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CalendarIcon } from "lucide-react";
-import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import { todayIsoDateLocal } from "@/lib/formatDate";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -20,6 +19,14 @@ import { Textarea } from "@/components/ui/textarea";
 
 const ACCENT = "#FF6B6C";
 
+type Reminder = {
+  id: string;
+  title: string;
+  date: string;
+  note: string | null;
+  tags: string[] | null;
+};
+
 function formatDateLabel(isoDate: string) {
   const parsed = new Date(`${isoDate}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return "Choose date";
@@ -35,59 +42,62 @@ function normalizeTag(raw: string) {
   return raw.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export default function NewMemoryPage() {
+export default function EditReminderPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const titleRef = useRef<HTMLInputElement | null>(null);
-  const detailsRef = useRef<HTMLTextAreaElement | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const [loading, setLoading] = useState(true);
+  const [original, setOriginal] = useState<Reminder | null>(null);
   const [title, setTitle] = useState("");
-  const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
-  const [details, setDetails] = useState("");
+  const [date, setDate] = useState(todayIsoDateLocal);
+  const [note, setNote] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [discardOpen, setDiscardOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [reminderDateSet, setReminderDateSet] = useState<Set<string>>(new Set());
 
   const canSave = title.trim().length > 0 && !submitting;
-  const isDirty =
-    title.trim().length > 0 ||
-    details.trim().length > 0 ||
-    tagInput.trim().length > 0 ||
-    tags.length > 0;
-
-  useEffect(() => {
-    titleRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    const textarea = detailsRef.current;
-    if (!textarea) return;
-    textarea.style.height = "0px";
-    textarea.style.height = `${Math.max(220, textarea.scrollHeight)}px`;
-  }, [details]);
 
   useEffect(() => {
     let cancelled = false;
-    async function loadReminderDates() {
+    async function loadReminder() {
+      setLoading(true);
       const response = await fetch("/api/reminders");
       const json = await response.json().catch(() => ({}));
-      if (cancelled || !response.ok || !Array.isArray(json.reminders)) return;
-      const next = new Set<string>();
-      for (const reminder of json.reminders as Array<{ date?: string }>) {
-        const iso = String(reminder.date ?? "").trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) next.add(iso);
+      if (cancelled || !response.ok || !Array.isArray(json.reminders)) {
+        setLoading(false);
+        return;
       }
-      setReminderDateSet(next);
+      const found = (json.reminders as Reminder[]).find((item) => item.id === id) ?? null;
+      setOriginal(found);
+      setTitle(found?.title ?? "");
+      setDate(found?.date ?? todayIsoDateLocal());
+      setNote(found?.note ?? "");
+      setTags((found?.tags ?? []).map((tag) => normalizeTag(tag)));
+      setLoading(false);
     }
-    void loadReminderDates();
+    void loadReminder();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [id]);
+
+  useEffect(() => {
+    if (!loading) {
+      titleRef.current?.focus();
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    const textarea = noteRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.max(220, textarea.scrollHeight)}px`;
+  }, [note]);
 
   function commitTag() {
     const next = normalizeTag(tagInput);
@@ -96,55 +106,74 @@ export default function NewMemoryPage() {
     setTagInput("");
   }
 
-  function handleBack() {
-    if (!isDirty || submitting) {
-      router.push("/home");
-      return;
-    }
-    setDiscardOpen(true);
-  }
-
   async function onSave() {
-    if (!canSave) return;
+    if (!canSave || !id) return;
     setError(null);
     setSubmitting(true);
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setError("You must be signed in.");
-        return;
-      }
-
-      const res = await fetch("/api/memories", {
-        method: "POST",
+      const response = await fetch(`/api/reminders/${id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(),
-          details: details.trim() || null,
-          type: "text",
+          date,
+          note: note.trim() || null,
           tags: tags.length ? tags : null,
-          memory_date: memoryDate,
+          recurrence: "none",
+          type: "occasion",
         }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(json.error ?? "Could not save moment. Please try again.");
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(json.error ?? "Could not save reminder.");
         return;
       }
-      router.push("/home");
+      router.push("/reminders");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const reminderDates = useMemo(
-    () =>
-      Array.from(reminderDateSet).map((iso) => new Date(`${iso}T00:00:00`)).filter((d) => !Number.isNaN(d.getTime())),
-    [reminderDateSet],
-  );
+  function handleBack() {
+    if (!original || submitting) {
+      router.push("/reminders");
+      return;
+    }
+    const baselineTags = new Set((original.tags ?? []).map((tag) => normalizeTag(tag)));
+    const currentTags = new Set(tags.map((tag) => normalizeTag(tag)));
+    const tagsChanged =
+      baselineTags.size !== currentTags.size ||
+      Array.from(baselineTags).some((tag) => !currentTags.has(tag));
+
+    const isDirty =
+      title.trim() !== original.title.trim() ||
+      date !== original.date ||
+      note.trim() !== (original.note ?? "").trim() ||
+      tagsChanged ||
+      tagInput.trim().length > 0;
+
+    if (!isDirty) {
+      router.push("/reminders");
+      return;
+    }
+    setDiscardOpen(true);
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-dvh bg-[#f7f7f8] p-4">
+        <p className="text-sm text-zinc-500">Loading...</p>
+      </main>
+    );
+  }
+
+  if (!original) {
+    return (
+      <main className="min-h-dvh bg-[#f7f7f8] p-4">
+        <p className="text-sm text-zinc-600">Reminder not found.</p>
+      </main>
+    );
+  }
 
   return (
     <main className="relative flex min-h-dvh flex-col bg-[#f7f7f8] text-zinc-800">
@@ -157,7 +186,7 @@ export default function NewMemoryPage() {
         >
           <ArrowLeft className="size-5" />
         </button>
-        <h1 className="font-serif text-lg tracking-tight text-zinc-800">New moment</h1>
+        <h1 className="font-serif text-lg tracking-tight text-zinc-800">Edit reminder</h1>
         <button
           type="button"
           onClick={onSave}
@@ -190,24 +219,16 @@ export default function NewMemoryPage() {
               }
             >
               <CalendarIcon className="size-4" />
-              <span>{formatDateLabel(memoryDate)}</span>
+              <span>{formatDateLabel(date)}</span>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-auto p-2">
               <Calendar
                 mode="single"
-                selected={new Date(`${memoryDate}T00:00:00`)}
+                selected={new Date(`${date}T00:00:00`)}
                 onSelect={(value) => {
                   if (!value) return;
-                  const nextIso = value.toISOString().slice(0, 10);
-                  setMemoryDate(nextIso);
+                  setDate(value.toISOString().slice(0, 10));
                   setDateOpen(false);
-                }}
-                modifiers={{ hasReminder: reminderDates }}
-                modifiersStyles={{
-                  hasReminder: {
-                    backgroundImage: `radial-gradient(circle at 50% 92%, ${ACCENT} 2px, transparent 2.5px)`,
-                    backgroundRepeat: "no-repeat",
-                  },
                 }}
               />
             </PopoverContent>
@@ -215,9 +236,9 @@ export default function NewMemoryPage() {
         </div>
 
         <Textarea
-          ref={detailsRef}
-          value={details}
-          onChange={(event) => setDetails(event.target.value)}
+          ref={noteRef}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
           placeholder="What do you want to remember?"
           aria-label="Details"
           className="mt-4 min-h-[220px] resize-none border-0 bg-transparent p-0 text-lg leading-7 text-zinc-700 shadow-none outline-hidden placeholder:text-zinc-500 focus-visible:ring-0"
@@ -235,7 +256,6 @@ export default function NewMemoryPage() {
                 type="button"
                 onClick={() => setTags((prev) => prev.filter((existing) => existing !== tag))}
                 className="rounded-full bg-zinc-200 px-3 py-1 text-xs text-zinc-700"
-                aria-label={`Remove ${tag}`}
               >
                 {tag}
               </button>
@@ -260,7 +280,7 @@ export default function NewMemoryPage() {
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Discard this moment?</DialogTitle>
+            <DialogTitle>Discard this reminder?</DialogTitle>
             <DialogDescription>
               Your changes have not been saved.
             </DialogDescription>
@@ -273,7 +293,7 @@ export default function NewMemoryPage() {
               type="button"
               onClick={() => {
                 setDiscardOpen(false);
-                router.push("/home");
+                router.push("/reminders");
               }}
               style={{ backgroundColor: ACCENT }}
             >
@@ -285,4 +305,3 @@ export default function NewMemoryPage() {
     </main>
   );
 }
-

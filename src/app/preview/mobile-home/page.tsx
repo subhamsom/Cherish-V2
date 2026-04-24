@@ -26,23 +26,16 @@ async function withTimeout<T>(
   ]);
 }
 
-export default async function HomePage() {
+export default async function PreviewMobileHomePage() {
   const supabase = await createServerComponentSupabaseClient();
 
-  console.time("[home] getUser");
   const {
     data: { user },
     error: userError,
   } = await withTimeout(supabase.auth.getUser(), "getUser");
-  console.timeEnd("[home] getUser");
 
-  if (userError) {
-    console.error("[home] getUser error:", userError);
-    redirect("/");
-  }
-
-  if (!user) {
-    redirect("/");
+  if (userError || !user) {
+    return <MobileHomeMock />;
   }
 
   const loaded = await loadPartnerMemoriesForUser(supabase, user.id);
@@ -51,21 +44,10 @@ export default async function HomePage() {
     if (loaded.reason === "no_partner") {
       redirect("/onboarding");
     }
-    if (loaded.reason === "partner_fetch") {
-      console.error("[home] fetchPartner failed");
-      return (
-        <main className="flex min-h-dvh items-center justify-center p-4">
-          <p className="max-w-sm text-center text-sm text-zinc-600">
-            Could not load partner right now. Please refresh.
-          </p>
-        </main>
-      );
-    }
-    console.error("[home] fetchMemories failed");
     return (
-      <main className="flex min-h-dvh items-center justify-center p-4">
+      <main className="flex min-h-dvh items-center justify-center bg-zinc-100 p-4">
         <p className="max-w-sm text-center text-sm text-zinc-600">
-          Could not load memories right now. Please refresh.
+          Could not load data for this preview. Please refresh.
         </p>
       </main>
     );
@@ -80,6 +62,7 @@ export default async function HomePage() {
       memoriesFromDb={feed}
       greetingName={greetingName}
       weeklyStats={stats}
+      liveDataBanner
       appNavigation
     />
   );

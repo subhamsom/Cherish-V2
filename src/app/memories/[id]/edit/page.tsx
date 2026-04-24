@@ -1,54 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import { ArrowLeft, CalendarIcon } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
-import { Camera, Calendar, Gift, Mic, Type } from "lucide-react";
 import { isoDateFromCreatedAt, todayIsoDateLocal } from "@/lib/formatDate";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 
-const MEMORY_TYPES = [
-  { value: "text", label: "Text", Icon: Type },
-  { value: "voice", label: "Voice", Icon: Mic },
-  { value: "photo", label: "Photo", Icon: Camera },
-  { value: "gift", label: "Gift", Icon: Gift },
-  { value: "occasion", label: "Occasion", Icon: Calendar },
-] as const;
+const ACCENT = "#FF6B6C";
 
-const PRESET_TAGS = [
-  "happy",
-  "romantic",
-  "grateful",
-  "funny",
-  "milestone",
-  "difficult",
-  "peaceful",
-  "excited",
-] as const;
-
-type MemoryType = (typeof MEMORY_TYPES)[number]["value"];
-type PresetTag = (typeof PRESET_TAGS)[number];
-
-function autoTitleFromText(raw: string): string {
-  const text = raw.trim();
-  if (!text) return "";
-  const dotIndex = text.indexOf(".");
-  const base =
-    dotIndex === -1 ? text.slice(0, 60) : text.slice(0, Math.min(dotIndex + 1, 60));
-  return base.length < text.length && base.length === 60 ? `${base}…` : base;
+function formatDateLabel(isoDate: string) {
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "Choose date";
+  return parsed.toLocaleDateString("en-US", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
-function inferTypeFromContext(
-  hasVoice: boolean,
-  hasPhoto: boolean,
-  tags: string[],
-): MemoryType {
-  if (hasVoice) return "voice";
-  if (hasPhoto) return "photo";
-  const lower = tags.map((t) => t.toLowerCase());
-  if (lower.includes("gift")) return "gift";
-  if (lower.includes("occasion")) return "occasion";
-  return "text";
+function normalizeTag(raw: string) {
+  return raw.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 type Memory = {
@@ -65,6 +49,8 @@ export default function EditMemoryPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const titleRef = useRef<HTMLInputElement | null>(null);
+  const detailsRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [memory, setMemory] = useState<Memory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,14 +58,13 @@ export default function EditMemoryPage() {
   const [title, setTitle] = useState("");
   const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
   const [details, setDetails] = useState("");
-  const [type, setType] = useState<MemoryType>("text");
-  const [tags, setTags] = useState<PresetTag[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  function toggleTag(tag: PresetTag) {
-    setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
-  }
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [reminderDateSet, setReminderDateSet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -108,8 +93,7 @@ export default function EditMemoryPage() {
           (data?.created_at ? isoDateFromCreatedAt(data.created_at) : todayIsoDateLocal()),
       );
       setDetails(data?.content ?? "");
-      setType((data?.type as MemoryType) ?? "text");
-      setTags((data?.tags as PresetTag[] | null) ?? []);
+      setTags((data?.tags as string[] | null) ?? []);
       setLoading(false);
     }
 
@@ -119,29 +103,88 @@ export default function EditMemoryPage() {
     };
   }, [id, supabase]);
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, [loading]);
+
+  useEffect(() => {
+    const textarea = detailsRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.max(220, textarea.scrollHeight)}px`;
+  }, [details]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadReminderDates() {
+      const response = await fetch("/api/reminders");
+      const json = await response.json().catch(() => ({}));
+      if (cancelled || !response.ok || !Array.isArray(json.reminders)) return;
+      const next = new Set<string>();
+      for (const reminder of json.reminders as Array<{ date?: string }>) {
+        const iso = String(reminder.date ?? "").trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) next.add(iso);
+      }
+      setReminderDateSet(next);
+    }
+    void loadReminderDates();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function commitTag() {
+    const next = normalizeTag(tagInput);
+    if (!next) return;
+    setTags((prev) => (prev.includes(next) ? prev : [...prev, next]));
+    setTagInput("");
+  }
+
+  function handleBack() {
+    if (!memory || submitting) {
+      router.push("/home");
+      return;
+    }
+    const baselineTags = new Set((memory.tags ?? []).map((tag) => normalizeTag(tag)));
+    const currentTags = new Set(tags.map((tag) => normalizeTag(tag)));
+    const tagsChanged =
+      baselineTags.size !== currentTags.size ||
+      Array.from(baselineTags).some((tag) => !currentTags.has(tag));
+    const isDirty =
+      title.trim() !== (memory.title ?? "").trim() ||
+      details.trim() !== memory.content.trim() ||
+      memoryDate.trim() !==
+        (memory.memory_date?.trim() ||
+          (memory.created_at ? isoDateFromCreatedAt(memory.created_at) : todayIsoDateLocal())) ||
+      tagsChanged ||
+      tagInput.trim().length > 0;
+    if (!isDirty) {
+      router.push("/home");
+      return;
+    }
+    setDiscardOpen(true);
+  }
+
+  const canSave = title.trim().length > 0 && !submitting;
+
+  async function onSave() {
     setError(null);
-
-    const trimmedDetails = details.trim();
-
     const md = memoryDate.trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(md)) {
       setError("Please choose a valid date.");
       return;
     }
+    if (!canSave || !id) return;
 
     setSubmitting(true);
     try {
-      if (!id) return;
-
       const res = await fetch(`/api/memories/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: autoTitleFromText(trimmedDetails || title),
-          details: trimmedDetails ? trimmedDetails : null,
-          type: inferTypeFromContext(false, false, tags),
+          title: title.trim(),
+          details: details.trim() || null,
+          type: "text",
           tags: tags.length ? tags : null,
           memory_date: md,
         }),
@@ -169,126 +212,152 @@ export default function EditMemoryPage() {
 
   if (!memory) {
     return (
-      <main style={{ padding: 16 }}>
-        <p>Memory not found.</p>
-        <Link href="/home">Go home</Link>
+      <main className="min-h-dvh bg-[#f7f7f8] p-4">
+        <p className="text-sm text-zinc-600">Memory not found.</p>
       </main>
     );
   }
 
+  const reminderDates = Array.from(reminderDateSet)
+    .map((iso) => new Date(`${iso}T00:00:00`))
+    .filter((d) => !Number.isNaN(d.getTime()));
+
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-white dark:bg-black">
-      <section className="w-full max-w-2xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-          Edit memory
-        </h1>
+    <main className="relative flex min-h-dvh flex-col bg-[#f7f7f8] text-zinc-800">
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-zinc-200/80 bg-[#f7f7f8]/95 px-3 py-3 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="flex size-10 items-center justify-center rounded-full text-zinc-700"
+          aria-label="Back"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
+        <h1 className="font-serif text-lg tracking-tight text-zinc-800">Edit moment</h1>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!canSave}
+          className="rounded-full px-4 py-1.5 text-sm font-medium text-white transition-colors disabled:bg-zinc-300 disabled:text-zinc-500"
+          style={{ backgroundColor: canSave ? ACCENT : undefined }}
+        >
+          {submitting ? "Saving..." : "Save"}
+        </button>
+      </header>
 
-        <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-5">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              Title
-            </span>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              className="border border-zinc-200 rounded-lg px-3 py-2 bg-white text-black dark:bg-zinc-900 dark:text-zinc-50"
-            />
-          </label>
+      <section className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-40 pt-5">
+        <input
+          ref={titleRef}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Add title"
+          aria-label="Title"
+          className="w-full border-0 bg-transparent p-0 font-serif text-[2.15rem] leading-[1.1] text-zinc-700 outline-hidden placeholder:text-zinc-500"
+        />
 
-          <label className="flex flex-col gap-2">
-            <span className="text-sm text-zinc-600 dark:text-zinc-400">Date</span>
-            <input
-              type="date"
-              value={memoryDate}
-              onChange={(e) => setMemoryDate(e.target.value)}
-              className="border border-zinc-200 rounded-lg px-3 py-2 bg-white text-black dark:bg-zinc-900 dark:text-zinc-50 dark:border-zinc-800"
-            />
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              Details (optional)
-            </span>
-            <textarea
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-              className="border border-zinc-200 rounded-lg px-3 py-2 bg-white text-black dark:bg-zinc-900 dark:text-zinc-50 min-h-[120px]"
-            />
-          </label>
-
-          <div>
-            <div className="flex gap-2 overflow-x-auto">
-              {MEMORY_TYPES.map((t) => {
-                const Icon = t.Icon;
-                const active = type === t.value;
-                return (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => setType(t.value)}
-                    aria-pressed={active}
-                    className={[
-                      "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg border transition-colors",
-                      active
-                        ? "bg-black text-white border-black dark:bg-white dark:text-black dark:border-white"
-                        : "bg-white text-black border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900",
-                    ].join(" ")}
-                  >
-                    <Icon size={18} />
-                    <span className="text-xs font-medium">{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 mb-2">
-              How did it feel?
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {PRESET_TAGS.map((tag) => {
-                const active = tags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleTag(tag)}
-                    aria-pressed={active}
-                    className={[
-                      "px-3 py-1.5 rounded-full text-sm border transition-colors",
-                      active
-                        ? "bg-black text-white border-black dark:bg-white dark:text-black dark:border-white"
-                        : "bg-white text-black border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900",
-                    ].join(" ")}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-3 rounded-lg bg-black text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+        <div className="mt-3">
+          <Popover open={dateOpen} onOpenChange={setDateOpen}>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-full px-1 py-1 text-sm text-zinc-500"
+                />
+              }
             >
-              {submitting ? "Saving..." : "Save changes"}
-            </button>
-            <Link
-              href="/home"
-              className="px-5 py-3 rounded-lg border border-zinc-200 bg-white text-black hover:bg-zinc-50 dark:bg-zinc-950 dark:text-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-            >
-              Cancel
-            </Link>
-          </div>
-        </form>
+              <CalendarIcon className="size-4" />
+              <span>{formatDateLabel(memoryDate)}</span>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-2">
+              <Calendar
+                mode="single"
+                selected={new Date(`${memoryDate}T00:00:00`)}
+                onSelect={(value) => {
+                  if (!value) return;
+                  const nextIso = value.toISOString().slice(0, 10);
+                  setMemoryDate(nextIso);
+                  setDateOpen(false);
+                }}
+                modifiers={{ hasReminder: reminderDates }}
+                modifiersStyles={{
+                  hasReminder: {
+                    backgroundImage: `radial-gradient(circle at 50% 92%, ${ACCENT} 2px, transparent 2.5px)`,
+                    backgroundRepeat: "no-repeat",
+                  },
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <Textarea
+          ref={detailsRef}
+          value={details}
+          onChange={(event) => setDetails(event.target.value)}
+          placeholder="What do you want to remember?"
+          aria-label="Details"
+          className="mt-4 min-h-[220px] resize-none border-0 bg-transparent p-0 text-lg leading-7 text-zinc-700 shadow-none outline-hidden placeholder:text-zinc-500 focus-visible:ring-0"
+        />
+
+        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       </section>
+
+      <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-200 bg-[#f7f7f8]/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm">
+        {tags.length > 0 ? (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setTags((prev) => prev.filter((existing) => existing !== tag))}
+                className="rounded-full bg-zinc-200 px-3 py-1 text-xs text-zinc-700"
+                aria-label={`Remove ${tag}`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <input
+          value={tagInput}
+          onChange={(event) => setTagInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "," || event.key === "Enter") {
+              event.preventDefault();
+              commitTag();
+            }
+          }}
+          onBlur={commitTag}
+          placeholder="Tags (optional)"
+          className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-700 outline-hidden focus:border-zinc-400"
+        />
+      </footer>
+
+      <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Discard this moment?</DialogTitle>
+            <DialogDescription>
+              Your changes have not been saved.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="bg-transparent p-0 pt-2">
+            <Button variant="outline" onClick={() => setDiscardOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setDiscardOpen(false);
+                router.push("/home");
+              }}
+              style={{ backgroundColor: ACCENT }}
+            >
+              Discard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
