@@ -11,6 +11,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { MobileHomeFeedMemory } from "@/lib/mobileHomeFeedFromDb";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
@@ -291,6 +292,7 @@ export default function MobileHomeMock({
   liveDataBanner = false,
   appNavigation = false,
 }: MobileHomeMockProps = {}) {
+  const router = useRouter();
   const feed = memoriesFromDb ?? DEMO_FEED;
   const [filter, setFilter] = useState<FilterId>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -484,7 +486,22 @@ export default function MobileHomeMock({
                 return (
                   <article
                     key={memory.id}
-                    className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_28px_rgb(24_24_27_/_0.08)]"
+                    className={`overflow-hidden rounded-2xl bg-white shadow-[0_10px_28px_rgb(24_24_27_/_0.08)] ${
+                      appNavigation ? "cursor-pointer" : ""
+                    }`}
+                    role={appNavigation ? "button" : undefined}
+                    tabIndex={appNavigation ? 0 : undefined}
+                    onClick={() => {
+                      if (!appNavigation) return;
+                      router.push(`/memories/${memory.id}`);
+                    }}
+                    onKeyDown={(event) => {
+                      if (!appNavigation) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(`/memories/${memory.id}`);
+                      }
+                    }}
                   >
                     {memory.kind === "photo" ? (
                       <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100">
@@ -561,12 +578,13 @@ export default function MobileHomeMock({
                         </time>
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={(event) => {
+                            event.stopPropagation();
                             setLiked((prev) => ({
                               ...prev,
                               [memory.id]: !isLiked,
-                            }))
-                          }
+                            }));
+                          }}
                           aria-label={
                             isLiked ? "Unlike memory" : "Like memory"
                           }
