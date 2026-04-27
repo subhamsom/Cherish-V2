@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CalendarIcon, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
-import { isoDateFromCreatedAt, todayIsoDateLocal } from "@/lib/formatDate";
+import {
+  isoDateFromCreatedAt,
+  localDateToIso,
+  todayIsoDateLocal,
+} from "@/lib/formatDate";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
@@ -350,7 +354,7 @@ export default function MemoryViewPage() {
                 selected={new Date(`${memoryDate}T00:00:00`)}
                 onSelect={(value) => {
                   if (!value) return;
-                  const nextIso = value.toISOString().slice(0, 10);
+                  const nextIso = localDateToIso(value);
                   setMemoryDate(nextIso);
                   setDateOpen(false);
                 }}

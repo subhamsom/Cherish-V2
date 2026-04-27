@@ -6,6 +6,7 @@ import {
   mapDbMemoriesToMobileHomeFeed,
   weeklyActivityStats,
 } from "@/lib/mobileHomeFeedFromDb";
+import { localDateToIso } from "@/lib/formatDate";
 import { loadPartnerMemoriesForUser } from "@/lib/loadPartnerMemories";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
 
@@ -28,6 +29,15 @@ async function withTimeout<T>(
 export type SignedInMobileHomeResult =
   | { kind: "anonymous" }
   | { kind: "content"; node: ReactNode };
+
+export type MobileHomeUpcomingReminder = {
+  id: string;
+  title: string;
+  note: string | null;
+  date: string;
+  reminder_time: string | null;
+  completed: boolean | null;
+};
 
 /**
  * Shared feed for `/` (when signed in) and `/home`.
@@ -85,12 +95,40 @@ export async function resolveSignedInMobileHome(): Promise<SignedInMobileHomeRes
   const feed = mapDbMemoriesToMobileHomeFeed(loaded.rows);
   const stats = weeklyActivityStats(loaded.rows);
   const greetingName = greetingFirstNameFromUser(user);
+  const today = new Date();
+  const startIso = localDateToIso(
+    new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+  );
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  end.setDate(end.getDate() + 7);
+  const endIso = localDateToIso(end);
+
+  const { data: upcomingRemindersData, error: upcomingReminderError } = await withTimeout(
+    supabase
+      .from("reminders")
+      .select("id, title, note, date, reminder_time, completed")
+      .eq("user_id", user.id)
+      .eq("partner_id", loaded.partner.id)
+      .eq("completed", false)
+      .gte("date", startIso)
+      .lte("date", endIso)
+      .order("date", { ascending: true }),
+    "fetchUpcomingReminders",
+  );
+
+  if (upcomingReminderError) {
+    console.error("[home] fetchUpcomingReminders failed:", upcomingReminderError);
+  }
+
+  const upcomingReminders: MobileHomeUpcomingReminder[] = (upcomingRemindersData ??
+    []) as MobileHomeUpcomingReminder[];
 
   return {
     kind: "content",
     node: (
       <MobileHomeMock
         memoriesFromDb={feed}
+        upcomingReminders={upcomingReminders}
         greetingName={greetingName}
         weeklyStats={stats}
         appNavigation

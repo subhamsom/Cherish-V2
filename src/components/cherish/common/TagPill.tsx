@@ -13,8 +13,8 @@ interface TagPillProps {
           inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm cursor-pointer
           transition-colors select-none
           ${selected
-            ? 'bg-gray-800 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
+            ? 'bg-zinc-900 text-white border border-zinc-900 shadow-sm'
+            : 'bg-white text-zinc-700 border border-zinc-200 shadow-sm hover:bg-zinc-50'}
         `}
       >
         {label}

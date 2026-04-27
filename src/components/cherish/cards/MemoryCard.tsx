@@ -48,7 +48,7 @@ export function MemoryCard({
       )}
 
       <div className="p-4 flex flex-col gap-2">
-        <p className="text-xs text-gray-400 uppercase tracking-wide">
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
           {formatDate(memoryDate)}
         </p>
 
@@ -57,7 +57,7 @@ export function MemoryCard({
         </h3>
 
         {content && (
-          <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">
+          <p className="text-sm text-zinc-800 line-clamp-2 leading-relaxed">
             {content}
           </p>
         )}
