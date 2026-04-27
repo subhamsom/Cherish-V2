@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarIcon } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
-import { todayIsoDateLocal } from "@/lib/formatDate";
+import { localDateToIso, todayIsoDateLocal } from "@/lib/formatDate";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -198,7 +198,7 @@ export default function NewMemoryPage() {
                 selected={new Date(`${memoryDate}T00:00:00`)}
                 onSelect={(value) => {
                   if (!value) return;
-                  const nextIso = value.toISOString().slice(0, 10);
+                  const nextIso = localDateToIso(value);
                   setMemoryDate(nextIso);
                   setDateOpen(false);
                 }}

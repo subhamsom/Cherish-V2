@@ -2,8 +2,6 @@
 
 import {
   Bell,
-  Camera,
-  Heart,
   Home,
   Plus,
   Search,
@@ -11,9 +9,14 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import type { MobileHomeFeedMemory } from "@/lib/mobileHomeFeedFromDb";
+import { MemoryCard } from "@/components/cherish/cards/MemoryCard";
+import { ReminderCard } from "@/components/cherish/cards/ReminderCard";
+import { TagPill } from "@/components/cherish/common/TagPill";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
+import type { MobileHomeUpcomingReminder } from "@/lib/resolveSignedInMobileHome";
 
 const SIGN_URL_TTL_SEC = 60 * 60;
 
@@ -22,17 +25,6 @@ function isAbsoluteHttpUrl(s: string) {
 }
 
 const ACCENT = "#FF6B6C";
-const ACCENT_SOFT = "rgb(255 107 108 / 0.08)";
-
-const FILTER_PILLS = [
-  { id: "all" as const, label: "All" },
-  { id: "text" as const, label: "Text" },
-  { id: "photo" as const, label: "Photo" },
-  { id: "voice" as const, label: "Voice" },
-  { id: "gift" as const, label: "Gifts" },
-];
-
-type FilterId = (typeof FILTER_PILLS)[number]["id"];
 
 const DEMO_FEED: MobileHomeFeedMemory[] = [
   {
@@ -91,182 +83,15 @@ function buildInitialLiked(list: MobileHomeFeedMemory[]): Record<string, boolean
   return next;
 }
 
-function WaveformMock() {
-  const heights = [40, 72, 48, 88, 36, 64, 52, 96, 44, 56, 38, 78];
-  return (
-    <div
-      className="flex h-12 items-center justify-center gap-0.5 rounded-xl px-2"
-      style={{ backgroundColor: ACCENT_SOFT }}
-      aria-hidden
-    >
-      {heights.map((h, i) => (
-        <span
-          key={i}
-          className="w-1 rounded-full bg-[#FF6B6C]/70"
-          style={{ height: `${h}%` }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function PhotoAreaPlaceholder() {
-  return (
-    <>
-      <div className="absolute inset-0 bg-linear-to-br from-zinc-200 via-zinc-100 to-zinc-50" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Camera
-          className="size-10 text-zinc-400"
-          strokeWidth={1.25}
-          aria-hidden
-        />
-      </div>
-    </>
-  );
-}
-
-/**
- * `image_url` in the DB is a storage path in the private `memories` bucket — same as Home,
- * we need a time-limited signed URL before `<img>` can load it.
- */
-function SignedMemoryImage({
-  storageRef,
-  title,
-}: {
-  storageRef: string | null;
-  title: string;
-}) {
-  const trimmed = storageRef?.trim() ?? "";
-  const [src, setSrc] = useState<string | null>(() =>
-    trimmed && isAbsoluteHttpUrl(trimmed) ? trimmed : null,
-  );
-  const [showPlaceholder, setShowPlaceholder] = useState(!trimmed);
-
-  useEffect(() => {
-    if (!trimmed) {
-      setSrc(null);
-      setShowPlaceholder(true);
-      return;
-    }
-    if (isAbsoluteHttpUrl(trimmed)) {
-      setSrc(trimmed);
-      setShowPlaceholder(false);
-      return;
-    }
-
-    let cancelled = false;
-    setShowPlaceholder(false);
-    setSrc(null);
-
-    const supabase = createBrowserSupabaseClient();
-    void supabase.storage
-      .from("memories")
-      .createSignedUrl(trimmed, SIGN_URL_TTL_SEC)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error || !data?.signedUrl) {
-          setShowPlaceholder(true);
-          return;
-        }
-        setSrc(data.signedUrl);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [trimmed]);
-
-  if (!trimmed || showPlaceholder) {
-    return <PhotoAreaPlaceholder />;
-  }
-
-  if (!src) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-zinc-100">
-        <span className="text-xs text-zinc-400">Loading…</span>
-      </div>
-    );
-  }
-
-  return (
-    // eslint-disable-next-line @next/next/no-img-element -- signed Supabase URL from createSignedUrl
-    <img
-      src={src}
-      alt={title}
-      className="absolute inset-0 h-full w-full object-cover"
-      onError={() => setShowPlaceholder(true)}
-    />
-  );
-}
-
-function SignedMemoryAudio({ storageRef }: { storageRef: string }) {
-  const trimmed = storageRef.trim();
-  const [src, setSrc] = useState<string | null>(() =>
-    isAbsoluteHttpUrl(trimmed) ? trimmed : null,
-  );
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (!trimmed) {
-      setSrc(null);
-      setFailed(true);
-      return;
-    }
-    if (isAbsoluteHttpUrl(trimmed)) {
-      setSrc(trimmed);
-      setFailed(false);
-      return;
-    }
-
-    let cancelled = false;
-    setSrc(null);
-    setFailed(false);
-
-    const supabase = createBrowserSupabaseClient();
-    void supabase.storage
-      .from("memories")
-      .createSignedUrl(trimmed, SIGN_URL_TTL_SEC)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error || !data?.signedUrl) {
-          setFailed(true);
-          return;
-        }
-        setSrc(data.signedUrl);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [trimmed]);
-
-  if (failed || !trimmed) {
-    return (
-      <p className="text-xs text-zinc-500">
-        Could not load this recording. Open the memory from Home to try again.
-      </p>
-    );
-  }
-
-  if (!src) {
-    return (
-      <div className="flex h-12 items-center rounded-xl bg-zinc-100 px-3">
-        <span className="text-xs text-zinc-400">Loading audio…</span>
-      </div>
-    );
-  }
-
-  return (
-    <audio controls preload="metadata" className="h-10 w-full" src={src} />
-  );
-}
-
 export type MobileHomeMockProps = {
   /**
    * When provided (including an empty array), replaces the built-in demo feed.
    * Map DB rows with `mapDbMemoriesToMobileHomeFeed` on the server.
    */
   memoriesFromDb?: MobileHomeFeedMemory[];
+  upcomingReminders?: MobileHomeUpcomingReminder[];
+  totalMemoryCount?: number;
+  partnerName?: string;
   greetingName?: string;
   weeklyStats?: { total: number; voice: number; photo: number };
   /** Explains that the list is real account data (helps avoid confusing preview with production UI). */
@@ -286,28 +111,97 @@ const navInactiveClass =
 
 export default function MobileHomeMock({
   memoriesFromDb,
+  upcomingReminders = [],
+  totalMemoryCount,
+  partnerName,
   greetingName = "Sam",
   weeklyStats,
-  liveDataBanner = false,
   appNavigation = false,
 }: MobileHomeMockProps = {}) {
+  const router = useRouter();
   const feed = memoriesFromDb ?? DEMO_FEED;
-  const [filter, setFilter] = useState<FilterId>("all");
+  const [activeTag, setActiveTag] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [liked, setLiked] = useState(() => buildInitialLiked(feed));
+  const [signedImageUrls, setSignedImageUrls] = useState<Record<string, string>>({});
 
   const stats =
     weeklyStats ??
     (memoriesFromDb === undefined
       ? { total: 4, voice: 2, photo: 1 }
       : { total: 0, voice: 0, photo: 0 });
+  const partnerFirstName = (partnerName ?? greetingName).trim().split(/\s+/)[0] ?? greetingName;
 
-  const visible =
-    filter === "all" ? feed : feed.filter((m) => m.kind === filter);
+  const topTags = useMemo(() => {
+    const freq = new Map<string, number>();
+    for (const memory of feed) {
+      for (const tag of memory.tags) {
+        const cleaned = tag.trim();
+        if (!cleaned) continue;
+        freq.set(cleaned, (freq.get(cleaned) ?? 0) + 1);
+      }
+    }
+    return Array.from(freq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([tag]) => tag);
+  }, [feed]);
+
+  const tagPills = useMemo(() => ["all", ...topTags], [topTags]);
+
+  const visible = useMemo(() => {
+    const byTag =
+      activeTag === "all" ? feed : feed.filter((m) => m.tags.includes(activeTag));
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return byTag;
+    return byTag.filter((m) => {
+      if (m.title.toLowerCase().includes(q)) return true;
+      if (m.excerpt?.toLowerCase().includes(q)) return true;
+      if (m.dateLabel.toLowerCase().includes(q)) return true;
+      return m.tags.some((t) => t.toLowerCase().includes(q));
+    });
+  }, [feed, activeTag, searchQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const toSign = feed.filter(
+      (m) => m.imageStoragePath?.trim() && !isAbsoluteHttpUrl(m.imageStoragePath),
+    );
+    if (toSign.length === 0) {
+      setSignedImageUrls({});
+      return;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    void Promise.all(
+      toSign.map(async (memory) => {
+        const ref = memory.imageStoragePath?.trim() ?? "";
+        if (!ref) return null;
+        const { data, error } = await supabase.storage
+          .from("memories")
+          .createSignedUrl(ref, SIGN_URL_TTL_SEC);
+        if (error || !data?.signedUrl) return null;
+        return [memory.id, data.signedUrl] as const;
+      }),
+    ).then((pairs) => {
+      if (cancelled) return;
+      const next: Record<string, string> = {};
+      for (const pair of pairs) {
+        if (!pair) continue;
+        next[pair[0]] = pair[1];
+      }
+      setSignedImageUrls(next);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [feed]);
 
   return (
-    <div className="flex min-h-dvh justify-center bg-zinc-100 max-md:bg-zinc-50">
+    <div className="flex min-h-dvh justify-center bg-[#fafafa]">
       <div
-        className="relative flex min-h-dvh w-full max-w-[390px] flex-col overflow-hidden bg-zinc-50 text-zinc-900 md:my-8 md:min-h-[780px] md:max-h-[844px] md:rounded-[2.25rem] md:shadow-[0_24px_64px_rgb(24_24_27_/_0.12)]"
+        className="relative flex min-h-dvh w-full max-w-[390px] flex-col overflow-hidden bg-[#fafafa] text-zinc-900 md:my-8 md:min-h-[780px] md:max-h-[844px] md:rounded-[2.25rem] md:shadow-[0_24px_64px_rgb(24_24_27_/_0.12)]"
         style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
       >
         <div
@@ -354,40 +248,14 @@ export default function MobileHomeMock({
           id="main-content"
           className="relative z-10 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-40"
         >
-          {/* Hero: greeting + stats echoing title / date / richness of the journal */}
-          <section className="shrink-0 rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-zinc-500">Good morning</p>
-            <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-zinc-900">
-              {greetingName}
-            </h1>
-            {liveDataBanner ? (
-              <p className="mt-1 text-xs text-zinc-500">
-                Signed-in preview: showing memories from your account (same data
-                as Home).
-              </p>
-            ) : null}
-            <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-              Your entries can be{" "}
-              <span className="font-medium text-zinc-800">written</span>,{" "}
-              <span className="font-medium text-zinc-800">spoken</span>, or{" "}
-              <span className="font-medium text-zinc-800">shown in a photo</span>
-              — each with a date, tags, and a heart when it matters.
+          {/* Hero */}
+          <section className="shrink-0 px-0 pt-1">
+            <p className="text-xs font-medium uppercase tracking-widest text-zinc-500">
+              {totalMemoryCount ?? stats.total} moments · for {partnerFirstName}
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span
-                className="rounded-full px-2.5 py-1 text-xs font-semibold"
-                style={{
-                  color: ACCENT,
-                  backgroundColor: "white",
-                  boxShadow: "0 1px 6px rgb(24 24 27 / 0.08)",
-                }}
-              >
-                {stats.total} this week
-              </span>
-              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">
-                {stats.voice} voice · {stats.photo} photo
-              </span>
-            </div>
+            <h1 className="mt-1 font-serif text-4xl leading-tight font-bold text-zinc-900">
+              Your little archive.
+            </h1>
           </section>
 
           {/* Search */}
@@ -398,178 +266,137 @@ export default function MobileHomeMock({
             />
             <input
               type="search"
-              placeholder="search memories"
+              placeholder="Search memories, notes, tags..."
               aria-label="Search memories"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="h-11 w-full rounded-[100px] border-0 bg-white pl-10 pr-4 text-[15px] text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B6C]/35"
             />
           </div>
 
-          {/* Filters: outer wrapper must not use overflow-x — in a column flex+min-h-0 parent,
-              overflow other than visible can make the flex item's min-height collapse to 0. */}
+          {/* Tag pills */}
           <div className="shrink-0 py-0.5">
             <div
               className="-mx-1 flex min-h-10 items-center gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               role="tablist"
-              aria-label="Filter by memory type"
+              aria-label="Filter by most used tags"
             >
-              {FILTER_PILLS.map(({ id, label }) => {
-                const selected = filter === id;
+              {tagPills.map((tag) => {
+                const selected = activeTag === tag;
                 return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setFilter(id)}
-                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-full border px-4 text-sm font-semibold leading-none shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    style={
-                      selected
-                        ? {
-                            backgroundColor: ACCENT,
-                            borderColor: ACCENT,
-                            color: "#ffffff",
-                            outlineColor: ACCENT,
-                            fontSize: "0.875rem",
-                          }
-                        : {
-                            backgroundColor: "#ffffff",
-                            borderColor: "rgb(228 228 231)",
-                            color: "#3f3f46",
-                            outlineColor: ACCENT,
-                            fontSize: "0.875rem",
-                          }
-                    }
-                  >
-                    {label}
-                  </button>
+                  <TagPill
+                    key={tag}
+                    label={tag === "all" ? "All" : tag}
+                    selected={selected}
+                    onClick={() => setActiveTag(tag)}
+                  />
                 );
               })}
             </div>
           </div>
+
+          {/* Next Up */}
+          <section aria-label="Upcoming reminders" className="flex shrink-0 flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-serif text-base font-bold uppercase tracking-widest text-zinc-900">
+                NEXT UP
+              </h2>
+              {appNavigation ? (
+                <Link
+                  href="/reminders"
+                  className="text-sm font-medium text-zinc-600 hover:text-zinc-900"
+                >
+                  See all →
+                </Link>
+              ) : null}
+            </div>
+            {upcomingReminders.length === 0 ? (
+              <p className="rounded-2xl bg-white p-4 text-sm text-zinc-500 shadow-sm">
+                No reminders in the next 7 days.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {upcomingReminders.map((reminder) => {
+                  const today = new Date();
+                  const tomorrow = new Date(today);
+                  tomorrow.setDate(today.getDate() + 1);
+                  const reminderDate = new Date(`${reminder.date}T00:00:00`);
+                  const urgent =
+                    reminderDate.toDateString() === today.toDateString() ||
+                    reminderDate.toDateString() === tomorrow.toDateString();
+
+                  return (
+                    <ReminderCard
+                      key={reminder.id}
+                      id={reminder.id}
+                      title={reminder.title}
+                      note={reminder.note ?? undefined}
+                      date={reminder.date}
+                      reminderTime={reminder.reminder_time ?? undefined}
+                      urgent={urgent}
+                      onClick={
+                        appNavigation
+                          ? () => {
+                              router.push("/reminders");
+                            }
+                          : undefined
+                      }
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
           {/* Feed */}
           <section
             aria-label="Recent memories"
             className="flex shrink-0 flex-col gap-3"
           >
-            <h2 className="text-lg font-semibold italic tracking-tight text-zinc-900">
-              Recent memories
+            <h2 className="font-serif text-base font-bold text-zinc-900">
+              RECENT MOMENTS
             </h2>
             {visible.length === 0 ? (
               <p className="rounded-2xl bg-white p-6 text-center text-sm text-zinc-500 shadow-sm">
-                Nothing for this filter yet.
+                {searchQuery.trim()
+                  ? "No memories match your search."
+                  : activeTag === "all"
+                    ? "No memories yet."
+                    : "Nothing for this tag yet."}
               </p>
             ) : (
               visible.map((memory) => {
                 const isLiked = liked[memory.id] ?? false;
-                const hasMeta =
-                  memory.durationSec != null || memory.priceLabel != null;
+                const imageRef = memory.imageStoragePath?.trim() ?? "";
+                const resolvedImageUrl = imageRef
+                  ? isAbsoluteHttpUrl(imageRef)
+                    ? imageRef
+                    : signedImageUrls[memory.id]
+                  : undefined;
                 return (
-                  <article
+                  <MemoryCard
                     key={memory.id}
-                    className="overflow-hidden rounded-2xl bg-white shadow-[0_10px_28px_rgb(24_24_27_/_0.08)]"
-                  >
-                    {memory.kind === "photo" ? (
-                      <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100">
-                        <SignedMemoryImage
-                          storageRef={memory.imageStoragePath}
-                          title={memory.title}
-                        />
-                      </div>
-                    ) : null}
-
-                    <div className="p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          {hasMeta ? (
-                            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500">
-                              {memory.durationSec != null ? (
-                                <span className="text-zinc-400">
-                                  · {memory.durationSec}s
-                                </span>
-                              ) : null}
-                              {memory.priceLabel != null ? (
-                                <span className="text-zinc-400">
-                                  · {memory.priceLabel}
-                                </span>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          <h3
-                            className={`text-[15px] font-semibold leading-snug text-zinc-900 ${hasMeta ? "mt-1.5" : ""}`}
-                          >
-                            {memory.title}
-                          </h3>
-                        </div>
-                      </div>
-
-                      {memory.kind === "voice" ? (
-                        <div className="mt-3 space-y-2">
-                          {memory.audioStoragePath?.trim() ? (
-                            <SignedMemoryAudio
-                              storageRef={memory.audioStoragePath}
-                            />
-                          ) : (
-                            <>
-                              <WaveformMock />
-                              <p className="text-xs text-zinc-500">
-                                Demo waveform — add a voice memory on Home to hear
-                                your recording here.
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      ) : null}
-
-                      {memory.excerpt ? (
-                        <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-zinc-600">
-                          {memory.excerpt}
-                        </p>
-                      ) : null}
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {memory.tags.filter(Boolean).map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="mt-4 flex items-center justify-between pt-3">
-                        <time className="text-xs font-medium text-zinc-500">
-                          {memory.dateLabel}
-                        </time>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setLiked((prev) => ({
-                              ...prev,
-                              [memory.id]: !isLiked,
-                            }))
+                    id={memory.id}
+                    title={memory.title}
+                    content={memory.excerpt}
+                    memoryDate={memory.dateLabel}
+                    tags={memory.tags}
+                    imageUrl={resolvedImageUrl}
+                    liked={isLiked}
+                    onClick={
+                      appNavigation
+                        ? () => {
+                            router.push(`/memories/${memory.id}`);
                           }
-                          aria-label={
-                            isLiked ? "Unlike memory" : "Like memory"
-                          }
-                          aria-pressed={isLiked}
-                          className="flex size-10 items-center justify-center rounded-full transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2"
-                          style={{
-                            color: isLiked ? ACCENT : "#71717a",
-                            outlineColor: ACCENT,
-                          }}
-                        >
-                          <Heart
-                            className="size-5"
-                            strokeWidth={2}
-                            fill={isLiked ? "currentColor" : "none"}
-                            aria-hidden
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
+                        : undefined
+                    }
+                    onLike={() =>
+                      setLiked((prev) => ({
+                        ...prev,
+                        [memory.id]: !isLiked,
+                      }))
+                    }
+                  />
                 );
               })
             )}

@@ -80,11 +80,12 @@ export async function middleware(req: NextRequest) {
     let redirectPath: string | null = null;
 
     if (pathname === "/") {
-      redirectPath = partner ? "/home" : "/onboarding";
+      // Signed-in users with a partner stay on `/` — the root page loads real data.
+      redirectPath = partner ? null : "/onboarding";
     } else if (pathname === "/home" && !partner) {
       redirectPath = "/onboarding";
     } else if (pathname === "/onboarding" && partner) {
-      redirectPath = "/home";
+      redirectPath = "/";
     }
 
     if (redirectPath) {

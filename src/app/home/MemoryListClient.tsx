@@ -362,7 +362,7 @@ export default function MemoryListClient({
   function openEditModal(memory: Memory) {
     setDetailMenuOpen(false);
     setDetailMemory(null);
-    router.push(`/memories/${memory.id}/edit`);
+    router.push(`/memories/${memory.id}`);
   }
 
   function closeEditModal() {

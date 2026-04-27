@@ -33,6 +33,14 @@ export function todayIsoDateLocal() {
   return `${y}-${m}-${d}`;
 }
 
+/** Convert a Date object to local calendar date YYYY-MM-DD (no UTC shift). */
+export function localDateToIso(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /** UTC calendar date from an ISO timestamp, as YYYY-MM-DD. */
 export function isoDateFromCreatedAt(createdAt: string) {
   const date = new Date(createdAt);
