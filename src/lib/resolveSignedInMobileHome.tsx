@@ -1,11 +1,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import MobileHomeMock from "@/components/MobileHomeMock";
-import {
-  greetingFirstNameFromUser,
-  mapDbMemoriesToMobileHomeFeed,
-  weeklyActivityStats,
-} from "@/lib/mobileHomeFeedFromDb";
+import { mapDbMemoriesToMobileHomeFeed, weeklyActivityStats } from "@/lib/mobileHomeFeedFromDb";
 import { localDateToIso } from "@/lib/formatDate";
 import { loadPartnerMemoriesForUser } from "@/lib/loadPartnerMemories";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
@@ -94,7 +90,6 @@ export async function resolveSignedInMobileHome(): Promise<SignedInMobileHomeRes
 
   const feed = mapDbMemoriesToMobileHomeFeed(loaded.rows);
   const stats = weeklyActivityStats(loaded.rows);
-  const greetingName = greetingFirstNameFromUser(user);
   const today = new Date();
   const startIso = localDateToIso(
     new Date(today.getFullYear(), today.getMonth(), today.getDate()),
@@ -129,7 +124,8 @@ export async function resolveSignedInMobileHome(): Promise<SignedInMobileHomeRes
       <MobileHomeMock
         memoriesFromDb={feed}
         upcomingReminders={upcomingReminders}
-        greetingName={greetingName}
+        totalMemoryCount={loaded.rows.length}
+        partnerName={loaded.partner.name}
         weeklyStats={stats}
         appNavigation
       />

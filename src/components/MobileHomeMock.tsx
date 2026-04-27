@@ -90,6 +90,8 @@ export type MobileHomeMockProps = {
    */
   memoriesFromDb?: MobileHomeFeedMemory[];
   upcomingReminders?: MobileHomeUpcomingReminder[];
+  totalMemoryCount?: number;
+  partnerName?: string;
   greetingName?: string;
   weeklyStats?: { total: number; voice: number; photo: number };
   /** Explains that the list is real account data (helps avoid confusing preview with production UI). */
@@ -110,6 +112,8 @@ const navInactiveClass =
 export default function MobileHomeMock({
   memoriesFromDb,
   upcomingReminders = [],
+  totalMemoryCount,
+  partnerName,
   greetingName = "Sam",
   weeklyStats,
   appNavigation = false,
@@ -246,7 +250,7 @@ export default function MobileHomeMock({
           {/* Hero */}
           <section className="shrink-0 px-0 pt-1">
             <p className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-              {stats.total} moments · for {greetingName}
+              {totalMemoryCount ?? stats.total} moments · for {partnerName ?? greetingName}
             </p>
             <h1 className="mt-1 font-serif text-4xl leading-tight font-bold text-zinc-900">
               Your little archive.
@@ -293,8 +297,8 @@ export default function MobileHomeMock({
           {/* Next Up */}
           <section aria-label="Upcoming reminders" className="flex shrink-0 flex-col gap-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-serif text-base font-bold text-zinc-900">
-                Next Up
+              <h2 className="font-serif text-base font-bold uppercase tracking-widest text-zinc-900">
+                NEXT UP
               </h2>
               {appNavigation ? (
                 <Link
