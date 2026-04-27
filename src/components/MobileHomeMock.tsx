@@ -130,6 +130,7 @@ export default function MobileHomeMock({
     (memoriesFromDb === undefined
       ? { total: 4, voice: 2, photo: 1 }
       : { total: 0, voice: 0, photo: 0 });
+  const partnerFirstName = (partnerName ?? greetingName).trim().split(/\s+/)[0] ?? greetingName;
 
   const topTags = useMemo(() => {
     const freq = new Map<string, number>();
@@ -250,7 +251,7 @@ export default function MobileHomeMock({
           {/* Hero */}
           <section className="shrink-0 px-0 pt-1">
             <p className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-              {totalMemoryCount ?? stats.total} moments · for {partnerName ?? greetingName}
+              {totalMemoryCount ?? stats.total} moments · for {partnerFirstName}
             </p>
             <h1 className="mt-1 font-serif text-4xl leading-tight font-bold text-zinc-900">
               Your little archive.
