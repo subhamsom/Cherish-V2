@@ -199,9 +199,9 @@ export default function MobileHomeMock({
   }, [feed]);
 
   return (
-    <div className="flex min-h-dvh justify-center bg-[#fafafa]">
+    <div className="flex h-dvh justify-center bg-[#fafafa]">
       <div
-        className="relative flex min-h-dvh w-full max-w-[390px] flex-col overflow-hidden bg-[#fafafa] text-zinc-900 md:my-8 md:min-h-[780px] md:max-h-[844px] md:rounded-[2.25rem] md:shadow-[0_24px_64px_rgb(24_24_27_/_0.12)]"
+        className="relative flex h-dvh w-full max-w-[390px] flex-col overflow-hidden bg-[#fafafa] text-zinc-900 md:my-8 md:h-[844px] md:rounded-[2.25rem] md:shadow-[0_24px_64px_rgb(24_24_27_/_0.12)]"
         style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
       >
         <div
