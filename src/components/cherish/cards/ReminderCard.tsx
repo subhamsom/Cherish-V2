@@ -58,7 +58,7 @@ export function ReminderCard({
             {formatReminderDate(date, reminderTime)}
           </div>
 
-          <h3 className="font-serif font-bold text-gray-900 text-base leading-snug">
+          <h3 className="font-serif text-lg font-bold leading-snug text-gray-900">
             {title}
           </h3>
 
