@@ -60,6 +60,8 @@ export default function MemoryViewPage() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const titleWrapRef = useRef<HTMLTextAreaElement | null>(null);
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuPanelRef = useRef<HTMLDivElement | null>(null);
 
   const [memory, setMemory] = useState<Memory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -161,6 +163,19 @@ export default function MemoryViewPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (menuButtonRef.current?.contains(target)) return;
+      if (menuPanelRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [menuOpen]);
 
   function commitTag() {
     const next = normalizeTag(tagInput);
@@ -308,6 +323,7 @@ export default function MemoryViewPage() {
           ) : null}
           <div className="relative">
             <button
+              ref={menuButtonRef}
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
@@ -320,32 +336,33 @@ export default function MemoryViewPage() {
             </button>
 
             {menuOpen ? (
-              <>
-                <div
-                  className="fixed inset-0 z-30"
-                  onPointerDown={() => setMenuOpen(false)}
-                  aria-hidden
-                />
-                <div className="absolute right-0 top-9 z-40 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setConfirmOpen(true);
-                    }}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-sm text-zinc-700 hover:bg-zinc-100"
-                  >
-                    <Trash2 className="size-3.5" />
-                    Delete
-                  </button>
-                </div>
-              </>
+              <div
+                ref={menuPanelRef}
+                className="absolute right-0 top-9 z-50 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setConfirmOpen(true);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-sm text-zinc-700 hover:bg-zinc-100"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </button>
+              </div>
             ) : null}
           </div>
         </div>
       </header>
 
-      <section className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-40 pt-5">
+      <section
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-40 pt-5"
+        onScroll={() => {
+          if (menuOpen) setMenuOpen(false);
+        }}
+      >
         <Textarea
           ref={titleWrapRef}
           value={title}
