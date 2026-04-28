@@ -2,16 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CalendarIcon, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarIcon, MoreVertical, Pencil, Trash2, X } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import {
   isoDateFromCreatedAt,
   localDateToIso,
   todayIsoDateLocal,
 } from "@/lib/formatDate";
+import { TagPill } from "@/components/cherish/common/TagPill";
+import { NewMemoryFooter } from "@/components/cherish/NewMemoryFooter";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import MobileBottomNav from "@/components/MobileBottomNav";
+import { RemindersDueProvider } from "@/components/RemindersDueBadgeBridge";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +34,7 @@ type Memory = {
   content: string;
   type: string;
   tags: string[] | null;
+  image_url: string | null;
   memory_date?: string | null;
   created_at: string | null;
 };
@@ -63,6 +68,7 @@ export default function MemoryViewPage() {
   const [title, setTitle] = useState("");
   const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
   const [details, setDetails] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -80,7 +86,7 @@ export default function MemoryViewPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("memories")
-        .select("id, title, content, type, tags, memory_date, created_at")
+        .select("id, title, content, type, tags, memory_date, created_at, image_url")
         .eq("id", id)
         .maybeSingle();
 
@@ -96,6 +102,7 @@ export default function MemoryViewPage() {
             (data?.created_at ? isoDateFromCreatedAt(data.created_at) : todayIsoDateLocal()),
         );
         setDetails(data?.content ?? "");
+        setImageUrl(data?.image_url ?? null);
         setTags((data?.tags as string[] | null) ?? []);
       }
       setLoading(false);
@@ -182,6 +189,7 @@ export default function MemoryViewPage() {
         (memory.created_at ? isoDateFromCreatedAt(memory.created_at) : todayIsoDateLocal()),
     );
     setDetails(memory.content ?? "");
+    setImageUrl(memory.image_url ?? null);
     setTags((memory.tags as string[] | null) ?? []);
     setTagInput("");
     setError(null);
@@ -216,6 +224,7 @@ export default function MemoryViewPage() {
           details: details.trim() || null,
           type: memory?.type ?? "text",
           tags: tags.length ? tags : null,
+          image_url: imageUrl,
           memory_date: md,
         }),
       });
@@ -233,6 +242,7 @@ export default function MemoryViewPage() {
               title: title.trim(),
               content: details.trim(),
               tags: tags.length ? tags : null,
+              image_url: imageUrl,
               memory_date: md,
             }
           : prev,
@@ -380,31 +390,47 @@ export default function MemoryViewPage() {
           className="mt-4 min-h-[220px] resize-none border-0 bg-transparent p-0 text-lg leading-7 text-zinc-700 shadow-none outline-hidden placeholder:text-zinc-500 focus-visible:ring-0 read-only:cursor-default"
         />
 
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-      </section>
-
-      <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-200 bg-[#f7f7f8]/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm">
-        {tags.length > 0 ? (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {tags.map((tag) => (
+        {imageUrl ? (
+          <div className="relative mt-4">
+            <img
+              src={imageUrl}
+              alt="Memory attachment"
+              className="w-full rounded-2xl object-cover"
+            />
+            {isEditing ? (
               <button
-                key={tag}
                 type="button"
-                onClick={() => {
-                  if (!isEditing) return;
-                  setTags((prev) => prev.filter((existing) => existing !== tag));
-                }}
-                className="rounded-full bg-zinc-200 px-3 py-1 text-xs text-zinc-700 disabled:opacity-100"
-                aria-label={isEditing ? `Remove ${tag}` : tag}
-                disabled={!isEditing}
+                onClick={() => setImageUrl(null)}
+                aria-label="Remove image"
+                className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-black/60 text-white"
               >
-                {tag}
+                <X className="size-4" />
               </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {tags.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <TagPill
+                key={tag}
+                label={tag}
+                onRemove={
+                  isEditing
+                    ? () => setTags((prev) => prev.filter((existing) => existing !== tag))
+                    : undefined
+                }
+              />
             ))}
           </div>
         ) : null}
 
-        {!isEditing ? (
+        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+      </section>
+
+      {!isEditing ? (
+        <footer className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 border-t border-zinc-200 bg-[#f7f7f8]/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm">
           <button
             type="button"
             onClick={enterEditMode}
@@ -413,22 +439,16 @@ export default function MemoryViewPage() {
           >
             <Pencil className="size-6" />
           </button>
-        ) : (
-          <input
-            value={tagInput}
-            onChange={(event) => setTagInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "," || event.key === "Enter") {
-                event.preventDefault();
-                commitTag();
-              }
-            }}
-            onBlur={commitTag}
-            placeholder="Tags (optional)"
-            className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-700 outline-hidden focus:border-zinc-400"
-          />
-        )}
-      </footer>
+        </footer>
+      ) : (
+        <NewMemoryFooter
+          tags={tags}
+          tagInput={tagInput}
+          setTagInput={setTagInput}
+          onCommitTag={commitTag}
+          onRemoveTag={(tag) => setTags((prev) => prev.filter((existing) => existing !== tag))}
+        />
+      )}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent showCloseButton={false}>
@@ -452,6 +472,9 @@ export default function MemoryViewPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RemindersDueProvider>
+        <MobileBottomNav />
+      </RemindersDueProvider>
     </main>
   );
 }

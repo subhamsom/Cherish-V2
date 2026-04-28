@@ -15,6 +15,8 @@ export default function AppNavigationShell({ children }: { children: ReactNode }
   const isFullScreenCaptureRoute =
     pathname === "/memories/new" ||
     pathname === "/reminders/new" ||
+    /^\/memories\/[^/]+$/.test(pathname) ||
+    /^\/reminders\/[^/]+$/.test(pathname) ||
     /^\/memories\/[^/]+\/edit$/.test(pathname) ||
     /^\/reminders\/[^/]+\/edit$/.test(pathname);
   const hideNav =
