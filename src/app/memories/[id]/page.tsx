@@ -77,6 +77,7 @@ export default function MemoryViewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [reminderDateSet, setReminderDateSet] = useState<Set<string>>(new Set());
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -424,7 +425,8 @@ export default function MemoryViewPage() {
             <img
               src={signedImageUrl}
               alt="Memory attachment"
-              className="aspect-[4/3] w-full rounded-2xl object-cover"
+              onClick={() => setLightboxOpen(true)}
+              className="aspect-[4/3] w-full cursor-pointer rounded-2xl object-cover"
             />
             {isEditing ? (
               <button
@@ -476,6 +478,28 @@ export default function MemoryViewPage() {
           onRemoveTag={(tag) => setTags((prev) => prev.filter((existing) => existing !== tag))}
         />
       )}
+
+      {lightboxOpen && signedImageUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close image preview"
+            className="fixed right-4 top-4 text-white"
+          >
+            <X className="size-6" />
+          </button>
+          <img
+            src={signedImageUrl}
+            alt="Memory attachment"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-screen max-w-full object-contain"
+          />
+        </div>
+      ) : null}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent showCloseButton={false}>
