@@ -12,7 +12,9 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    scrollRestoration: true,
+  },
 };
 
 /** `@types/next-pwa` pins an older `NextConfig`; runtime config is valid for Next 15. */

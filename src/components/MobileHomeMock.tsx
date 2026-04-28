@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MobileHomeFeedMemory } from "@/lib/mobileHomeFeedFromDb";
 import { MemoryCard } from "@/components/cherish/cards/MemoryCard";
 import { ReminderCard } from "@/components/cherish/cards/ReminderCard";
@@ -25,6 +25,7 @@ function isAbsoluteHttpUrl(s: string) {
 }
 
 const ACCENT = "#FF6B6C";
+const HOME_SCROLL_KEY = "cherish:home:scroll-top";
 
 const DEMO_FEED: MobileHomeFeedMemory[] = [
   {
@@ -75,14 +76,6 @@ const DEMO_FEED: MobileHomeFeedMemory[] = [
   },
 ];
 
-function buildInitialLiked(list: MobileHomeFeedMemory[]): Record<string, boolean> {
-  const next: Record<string, boolean> = {};
-  for (const m of list) {
-    next[m.id] = m.likedDefault;
-  }
-  return next;
-}
-
 export type MobileHomeMockProps = {
   /**
    * When provided (including an empty array), replaces the built-in demo feed.
@@ -104,7 +97,7 @@ const profileBtnClass =
   "flex size-11 items-center justify-center rounded-full bg-white text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2";
 
 const fabClass =
-  "absolute bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-20 flex size-14 items-center justify-center rounded-2xl bg-[#FF6B6C] text-white shadow-[0_12px_32px_rgb(255_107_108_/_0.4)] transition-transform hover:-translate-y-0.5 hover:bg-[#E85E5F] active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6B6C]";
+  "absolute bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex size-14 items-center justify-center rounded-2xl bg-[#FF6B6C] text-white shadow-[0_12px_32px_rgb(255_107_108_/_0.4)] transition-transform hover:-translate-y-0.5 hover:bg-[#E85E5F] active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6B6C]";
 
 const navInactiveClass =
   "flex flex-1 flex-col items-center gap-1 py-3 text-zinc-400 transition-colors hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2";
@@ -119,10 +112,10 @@ export default function MobileHomeMock({
   appNavigation = false,
 }: MobileHomeMockProps = {}) {
   const router = useRouter();
+  const mainContentRef = useRef<HTMLDivElement>(null);
   const feed = memoriesFromDb ?? DEMO_FEED;
   const [activeTag, setActiveTag] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [liked, setLiked] = useState(() => buildInitialLiked(feed));
   const [signedImageUrls, setSignedImageUrls] = useState<Record<string, string>>({});
 
   const stats =
@@ -198,6 +191,28 @@ export default function MobileHomeMock({
     };
   }, [feed]);
 
+  useEffect(() => {
+    const container = mainContentRef.current;
+    if (!container) return;
+
+    const savedTop = sessionStorage.getItem(HOME_SCROLL_KEY);
+    if (!savedTop) return;
+
+    const parsed = Number(savedTop);
+    if (!Number.isFinite(parsed)) return;
+
+    // Wait one frame so content can lay out before restoring scroll.
+    requestAnimationFrame(() => {
+      container.scrollTop = parsed;
+    });
+  }, []);
+
+  const persistHomeScrollPosition = () => {
+    const container = mainContentRef.current;
+    if (!container) return;
+    sessionStorage.setItem(HOME_SCROLL_KEY, String(container.scrollTop));
+  };
+
   return (
     <div className="flex h-dvh justify-center bg-[#fafafa]">
       <div
@@ -246,6 +261,7 @@ export default function MobileHomeMock({
 
         <div
           id="main-content"
+          ref={mainContentRef}
           className="relative z-10 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-40"
         >
           {/* Hero */}
@@ -366,7 +382,6 @@ export default function MobileHomeMock({
               </p>
             ) : (
               visible.map((memory) => {
-                const isLiked = liked[memory.id] ?? false;
                 const imageRef = memory.imageStoragePath?.trim() ?? "";
                 const resolvedImageUrl = imageRef
                   ? isAbsoluteHttpUrl(imageRef)
@@ -376,25 +391,18 @@ export default function MobileHomeMock({
                 return (
                   <MemoryCard
                     key={memory.id}
-                    id={memory.id}
                     title={memory.title}
                     content={memory.excerpt}
                     memoryDate={memory.dateLabel}
                     tags={memory.tags}
                     imageUrl={resolvedImageUrl}
-                    liked={isLiked}
                     onClick={
                       appNavigation
                         ? () => {
+                            persistHomeScrollPosition();
                             router.push(`/memories/${memory.id}`);
                           }
                         : undefined
-                    }
-                    onLike={() =>
-                      setLiked((prev) => ({
-                        ...prev,
-                        [memory.id]: !isLiked,
-                      }))
                     }
                   />
                 );

@@ -1,16 +1,12 @@
-import { Heart } from 'lucide-react'
 import { TagPill } from '@/components/cherish/common/TagPill'
 
 interface MemoryCardProps {
-  id: string
   title: string
   content?: string
   memoryDate: string
   tags?: string[]
   imageUrl?: string
-  liked?: boolean
   onClick?: () => void
-  onLike?: () => void
 }
 
 function formatDate(dateStr: string) {
@@ -22,15 +18,12 @@ function formatDate(dateStr: string) {
 }
 
 export function MemoryCard({
-  id,
   title,
   content,
   memoryDate,
   tags = [],
   imageUrl,
-  liked = false,
   onClick,
-  onLike,
 }: MemoryCardProps) {
   return (
     <div
@@ -70,18 +63,6 @@ export function MemoryCard({
           </div>
         )}
 
-        <div className="flex items-center justify-end mt-2">
-          <button
-            onClick={e => { e.stopPropagation(); onLike?.(); }}
-            className="text-gray-300 hover:text-red-400 transition-colors"
-            aria-label="Like"
-          >
-            <Heart
-              size={18}
-              className={liked ? 'fill-red-400 text-red-400' : ''}
-            />
-          </button>
-        </div>
       </div>
     </div>
   )
