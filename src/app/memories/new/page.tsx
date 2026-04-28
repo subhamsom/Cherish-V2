@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarIcon } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import { localDateToIso, todayIsoDateLocal } from "@/lib/formatDate";
+import { NewMemoryFooter } from "@/components/cherish/NewMemoryFooter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -134,7 +135,7 @@ export default function NewMemoryPage() {
         setError(json.error ?? "Could not save moment. Please try again.");
         return;
       }
-      router.push("/home");
+      router.push(`/home?refresh=${Date.now()}`);
     } finally {
       setSubmitting(false);
     }
@@ -147,8 +148,8 @@ export default function NewMemoryPage() {
   );
 
   return (
-    <main className="relative flex min-h-dvh flex-col bg-[#f7f7f8] text-zinc-800">
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-zinc-200/80 bg-[#f7f7f8]/95 px-3 py-3 backdrop-blur-sm">
+    <main className="relative flex min-h-dvh flex-col bg-[#fafafa] text-zinc-800">
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-zinc-200/80 bg-[#fafafa]/95 px-3 py-3 backdrop-blur-sm">
         <button
           type="button"
           onClick={handleBack}
@@ -226,36 +227,13 @@ export default function NewMemoryPage() {
         {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       </section>
 
-      <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-200 bg-[#f7f7f8]/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm">
-        {tags.length > 0 ? (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => setTags((prev) => prev.filter((existing) => existing !== tag))}
-                className="rounded-full bg-zinc-200 px-3 py-1 text-xs text-zinc-700"
-                aria-label={`Remove ${tag}`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <input
-          value={tagInput}
-          onChange={(event) => setTagInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "," || event.key === "Enter") {
-              event.preventDefault();
-              commitTag();
-            }
-          }}
-          onBlur={commitTag}
-          placeholder="Tags (optional)"
-          className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-700 outline-hidden focus:border-zinc-400"
-        />
-      </footer>
+      <NewMemoryFooter
+        tags={tags}
+        tagInput={tagInput}
+        setTagInput={setTagInput}
+        onCommitTag={commitTag}
+        onRemoveTag={(tag) => setTags((prev) => prev.filter((existing) => existing !== tag))}
+      />
 
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <DialogContent showCloseButton={false}>
