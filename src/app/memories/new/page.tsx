@@ -153,7 +153,7 @@ export default function NewMemoryPage() {
         <button
           type="button"
           onClick={handleBack}
-          className="flex size-10 items-center justify-center rounded-full text-zinc-700"
+          className="flex size-10 items-center justify-center rounded-full text-zinc-700 transition-transform active:scale-95 active:bg-zinc-100"
           aria-label="Back"
         >
           <ArrowLeft className="size-5" />

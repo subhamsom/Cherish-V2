@@ -44,47 +44,49 @@ export default function MobileBottomNav() {
       }}
       aria-label="Primary"
     >
-      <ul className="flex w-full items-stretch justify-evenly pb-[env(safe-area-inset-bottom)]">
-        {ITEMS.map(({ href, label, Icon, match }) => {
-          const active = match(pathname);
-          return (
-            <li key={href} className="flex flex-1">
-              <Link
-                href={href}
-                aria-current={active ? "page" : undefined}
-                className="flex flex-1 flex-col items-center gap-1 py-3"
-              >
-                <span className="relative inline-flex">
-                  <Icon
-                    aria-hidden
+      <div className="mx-auto w-full max-w-[390px] border-t border-zinc-200 bg-white/95 shadow-[0_-8px_24px_rgb(24_24_27_/_0.08)] backdrop-blur-xl">
+        <ul className="flex w-full items-stretch justify-evenly pb-[env(safe-area-inset-bottom)]">
+          {ITEMS.map(({ href, label, Icon, match }) => {
+            const active = match(pathname);
+            return (
+              <li key={href} className="flex flex-1">
+                <Link
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className="flex flex-1 flex-col items-center gap-1 py-3"
+                >
+                  <span className="relative inline-flex">
+                    <Icon
+                      aria-hidden
+                      className={
+                        active
+                          ? "text-[var(--foreground)]"
+                          : "text-[var(--muted-foreground)]"
+                      }
+                      size={22}
+                    />
+                    {href === "/reminders" && showReminderDot ? (
+                      <span
+                        className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-600"
+                        aria-hidden
+                      />
+                    ) : null}
+                  </span>
+                  <span
                     className={
                       active
-                        ? "text-[var(--foreground)]"
-                        : "text-[var(--muted-foreground)]"
+                        ? "text-xs font-medium text-[var(--foreground)]"
+                        : "text-xs text-[var(--muted-foreground)]"
                     }
-                    size={22}
-                  />
-                  {href === "/reminders" && showReminderDot ? (
-                    <span
-                      className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-600"
-                      aria-hidden
-                    />
-                  ) : null}
-                </span>
-                <span
-                  className={
-                    active
-                      ? "text-xs font-medium text-[var(--foreground)]"
-                      : "text-xs text-[var(--muted-foreground)]"
-                  }
-                >
-                  {label}
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+                  >
+                    {label}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </nav>
   );
 }

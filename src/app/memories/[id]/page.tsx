@@ -2,16 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CalendarIcon, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarIcon, MoreVertical, Pencil, Trash2, X } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import {
   isoDateFromCreatedAt,
   localDateToIso,
   todayIsoDateLocal,
 } from "@/lib/formatDate";
+import { TagPill } from "@/components/cherish/common/TagPill";
+import { NewMemoryFooter } from "@/components/cherish/NewMemoryFooter";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import MobileBottomNav from "@/components/MobileBottomNav";
+import { RemindersDueProvider } from "@/components/RemindersDueBadgeBridge";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +34,7 @@ type Memory = {
   content: string;
   type: string;
   tags: string[] | null;
+  image_url: string | null;
   memory_date?: string | null;
   created_at: string | null;
 };
@@ -63,6 +68,8 @@ export default function MemoryViewPage() {
   const [title, setTitle] = useState("");
   const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
   const [details, setDetails] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [signedImageUrl, setSignedImageUrl] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -80,7 +87,7 @@ export default function MemoryViewPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("memories")
-        .select("id, title, content, type, tags, memory_date, created_at")
+        .select("id, title, content, type, tags, memory_date, created_at, image_url")
         .eq("id", id)
         .maybeSingle();
 
@@ -88,7 +95,17 @@ export default function MemoryViewPage() {
       if (error) {
         console.error("Memory fetch failed:", error);
         setMemory(null);
+        setSignedImageUrl(null);
       } else {
+        let nextSignedImageUrl: string | null = null;
+        const imagePath = data?.image_url?.trim();
+        if (imagePath) {
+          const { data: signedData } = await supabase.storage
+            .from("memories")
+            .createSignedUrl(imagePath, 60 * 60);
+          nextSignedImageUrl = signedData?.signedUrl ?? null;
+        }
+        if (cancelled) return;
         setMemory(data);
         setTitle(data?.title ?? "");
         setMemoryDate(
@@ -96,6 +113,8 @@ export default function MemoryViewPage() {
             (data?.created_at ? isoDateFromCreatedAt(data.created_at) : todayIsoDateLocal()),
         );
         setDetails(data?.content ?? "");
+        setImageUrl(data?.image_url ?? null);
+        setSignedImageUrl(nextSignedImageUrl);
         setTags((data?.tags as string[] | null) ?? []);
       }
       setLoading(false);
@@ -121,7 +140,7 @@ export default function MemoryViewPage() {
     const textarea = detailsRef.current;
     if (!textarea) return;
     textarea.style.height = "0px";
-    textarea.style.height = `${Math.max(220, textarea.scrollHeight)}px`;
+    textarea.style.height = `${textarea.scrollHeight}px`;
   }, [details, isEditing]);
 
   useEffect(() => {
@@ -142,13 +161,6 @@ export default function MemoryViewPage() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onPointerDown = () => setMenuOpen(false);
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [menuOpen]);
 
   function commitTag() {
     const next = normalizeTag(tagInput);
@@ -182,6 +194,7 @@ export default function MemoryViewPage() {
         (memory.created_at ? isoDateFromCreatedAt(memory.created_at) : todayIsoDateLocal()),
     );
     setDetails(memory.content ?? "");
+    setImageUrl(memory.image_url ?? null);
     setTags((memory.tags as string[] | null) ?? []);
     setTagInput("");
     setError(null);
@@ -216,6 +229,7 @@ export default function MemoryViewPage() {
           details: details.trim() || null,
           type: memory?.type ?? "text",
           tags: tags.length ? tags : null,
+          image_url: imageUrl,
           memory_date: md,
         }),
       });
@@ -233,6 +247,7 @@ export default function MemoryViewPage() {
               title: title.trim(),
               content: details.trim(),
               tags: tags.length ? tags : null,
+              image_url: imageUrl,
               memory_date: md,
             }
           : prev,
@@ -271,7 +286,7 @@ export default function MemoryViewPage() {
             }
             router.push("/home");
           }}
-          className="flex size-10 items-center justify-center rounded-full text-zinc-700"
+          className="flex size-10 items-center justify-center rounded-full text-zinc-700 transition-transform active:scale-95 active:bg-zinc-100"
           aria-label={isEditing ? "Cancel edit" : "Back"}
         >
           <ArrowLeft className="size-5" />
@@ -299,25 +314,32 @@ export default function MemoryViewPage() {
                 setMenuOpen((v) => !v);
               }}
               aria-label="Memory options"
-              className="flex size-8 items-center justify-center rounded-full text-zinc-700"
+              className="relative z-50 flex size-8 items-center justify-center rounded-full text-zinc-700"
             >
               <MoreVertical className="size-4" />
             </button>
 
             {menuOpen ? (
-              <div className="absolute right-0 top-9 z-10 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setConfirmOpen(true);
-                  }}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-sm text-zinc-700 hover:bg-zinc-100"
-                >
-                  <Trash2 className="size-3.5" />
-                  Delete
-                </button>
-              </div>
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onPointerDown={() => setMenuOpen(false)}
+                  aria-hidden
+                />
+                <div className="absolute right-0 top-9 z-40 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setConfirmOpen(true);
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-sm text-zinc-700 hover:bg-zinc-100"
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete
+                  </button>
+                </div>
+              </>
             ) : null}
           </div>
         </div>
@@ -377,58 +399,66 @@ export default function MemoryViewPage() {
           readOnly={!isEditing}
           placeholder="What do you want to remember?"
           aria-label="Details"
-          className="mt-4 min-h-[220px] resize-none border-0 bg-transparent p-0 text-lg leading-7 text-zinc-700 shadow-none outline-hidden placeholder:text-zinc-500 focus-visible:ring-0 read-only:cursor-default"
+          className="mt-4 min-h-0 resize-none border-0 bg-transparent p-0 text-lg leading-7 text-zinc-700 shadow-none outline-hidden placeholder:text-zinc-500 focus-visible:ring-0 read-only:cursor-default"
         />
 
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-      </section>
-
-      <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-200 bg-[#f7f7f8]/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm">
-        {tags.length > 0 ? (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {tags.map((tag) => (
+        {imageUrl && signedImageUrl ? (
+          <div className="relative mt-4">
+            <img
+              src={signedImageUrl}
+              alt="Memory attachment"
+              className="aspect-[4/3] w-full rounded-2xl object-cover"
+            />
+            {isEditing ? (
               <button
-                key={tag}
                 type="button"
-                onClick={() => {
-                  if (!isEditing) return;
-                  setTags((prev) => prev.filter((existing) => existing !== tag));
-                }}
-                className="rounded-full bg-zinc-200 px-3 py-1 text-xs text-zinc-700 disabled:opacity-100"
-                aria-label={isEditing ? `Remove ${tag}` : tag}
-                disabled={!isEditing}
+                onClick={() => setImageUrl(null)}
+                aria-label="Remove image"
+                className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-black/60 text-white"
               >
-                {tag}
+                <X className="size-4" />
               </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {!isEditing && tags.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <TagPill
+                key={tag}
+                label={tag}
+                onRemove={
+                  isEditing
+                    ? () => setTags((prev) => prev.filter((existing) => existing !== tag))
+                    : undefined
+                }
+              />
             ))}
           </div>
         ) : null}
 
-        {!isEditing ? (
-          <button
-            type="button"
-            onClick={enterEditMode}
-            aria-label="Edit memory"
-            className="absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 flex size-14 items-center justify-center rounded-2xl bg-[#FF6B6C] text-white shadow-[0_12px_32px_rgb(255_107_108_/_0.4)] transition-transform hover:-translate-y-0.5"
-          >
-            <Pencil className="size-6" />
-          </button>
-        ) : (
-          <input
-            value={tagInput}
-            onChange={(event) => setTagInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "," || event.key === "Enter") {
-                event.preventDefault();
-                commitTag();
-              }
-            }}
-            onBlur={commitTag}
-            placeholder="Tags (optional)"
-            className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-700 outline-hidden focus:border-zinc-400"
-          />
-        )}
-      </footer>
+        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+      </section>
+
+      {!isEditing ? (
+        <button
+          type="button"
+          onClick={enterEditMode}
+          aria-label="Edit memory"
+          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-20 flex size-14 items-center justify-center rounded-2xl bg-[#FF6B6C] text-white shadow-[0_12px_32px_rgb(255_107_108_/_0.4)] transition-transform hover:-translate-y-0.5"
+        >
+          <Pencil className="size-6" />
+        </button>
+      ) : (
+        <NewMemoryFooter
+          tags={tags}
+          tagInput={tagInput}
+          setTagInput={setTagInput}
+          onCommitTag={commitTag}
+          onRemoveTag={(tag) => setTags((prev) => prev.filter((existing) => existing !== tag))}
+        />
+      )}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent showCloseButton={false}>
@@ -452,6 +482,11 @@ export default function MemoryViewPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {!isEditing ? (
+        <RemindersDueProvider>
+          <MobileBottomNav />
+        </RemindersDueProvider>
+      ) : null}
     </main>
   );
 }
