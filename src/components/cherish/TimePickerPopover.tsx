@@ -10,14 +10,14 @@ type TimePickerPopoverProps = {
   placeholder?: string;
 };
 
-function parseTime(value: string | null) {
+function parseTime(value: string | null): { hour: number; minute: number; period: "AM" | "PM" } {
   if (!value || !/^\d{2}:\d{2}$/.test(value)) {
     return { hour: 12, minute: 0, period: "AM" as const };
   }
   const [hourStr, minuteStr] = value.split(":");
   const hour24 = Number(hourStr);
   const minute = Number(minuteStr);
-  const period = hour24 >= 12 ? "PM" : "AM";
+  const period = hour24 >= 12 ? ("PM" as const) : ("AM" as const);
   const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
   return { hour: hour12, minute, period };
 }
