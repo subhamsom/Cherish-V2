@@ -102,8 +102,12 @@ export default function MemoryViewPage() {
         let nextImageUrl: string | null = null;
         const imagePath = data?.image_url?.trim();
         if (imagePath) {
-          const { data: publicData } = supabase.storage.from("memories").getPublicUrl(imagePath);
-          nextImageUrl = publicData.publicUrl ?? null;
+          if (imagePath.startsWith("https://")) {
+            nextImageUrl = imagePath;
+          } else {
+            const { data: publicData } = supabase.storage.from("memories").getPublicUrl(imagePath);
+            nextImageUrl = publicData.publicUrl ?? null;
+          }
         }
         if (cancelled) return;
         setMemory(data);
@@ -206,7 +210,15 @@ export default function MemoryViewPage() {
         (memory.created_at ? isoDateFromCreatedAt(memory.created_at) : todayIsoDateLocal()),
     );
     setDetails(memory.content ?? "");
-    setImageUrl(memory.image_url ?? null);
+    const rawImage = memory.image_url ?? null;
+    if (rawImage?.startsWith("https://")) {
+      setImageUrl(rawImage);
+    } else if (rawImage) {
+      const { data: publicData } = supabase.storage.from("memories").getPublicUrl(rawImage);
+      setImageUrl(publicData.publicUrl ?? null);
+    } else {
+      setImageUrl(null);
+    }
     setTags((memory.tags as string[] | null) ?? []);
     setTagInput("");
     setError(null);
