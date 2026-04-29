@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarIcon } from "lucide-react";
+import { ArrowLeft, CalendarIcon, X } from "lucide-react";
+import imageCompression from "browser-image-compression";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import { localDateToIso, todayIsoDateLocal } from "@/lib/formatDate";
 import { NewMemoryFooter } from "@/components/cherish/NewMemoryFooter";
@@ -45,6 +46,9 @@ export default function NewMemoryPage() {
   const [title, setTitle] = useState("");
   const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
   const [details, setDetails] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -90,6 +94,18 @@ export default function NewMemoryPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(imageFile);
+    setImagePreviewUrl(objectUrl);
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [imageFile]);
+
   function commitTag() {
     const next = normalizeTag(tagInput);
     if (!next) return;
@@ -119,6 +135,29 @@ export default function NewMemoryPage() {
         return;
       }
 
+      let nextUploadedImageUrl = uploadedImageUrl;
+      if (imageFile) {
+        const compressed = await imageCompression(imageFile, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true,
+        });
+        const imagePath = `${user.id}/${Date.now()}-${imageFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("memories")
+          .upload(imagePath, compressed, {
+            upsert: false,
+            contentType: compressed.type || imageFile.type || "image/jpeg",
+          });
+        if (uploadError) {
+          setError("Could not upload image. Please try again.");
+          return;
+        }
+        const { data: publicData } = supabase.storage.from("memories").getPublicUrl(imagePath);
+        nextUploadedImageUrl = publicData.publicUrl ?? null;
+        setUploadedImageUrl(nextUploadedImageUrl);
+      }
+
       const res = await fetch("/api/memories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,6 +166,7 @@ export default function NewMemoryPage() {
           details: details.trim() || null,
           type: "text",
           tags: tags.length ? tags : null,
+          image_url: nextUploadedImageUrl,
           memory_date: memoryDate,
         }),
       });
@@ -224,6 +264,24 @@ export default function NewMemoryPage() {
           className="mt-4 min-h-[220px] resize-none border-0 bg-transparent p-0 text-lg leading-7 text-zinc-700 shadow-none outline-hidden placeholder:text-zinc-500 focus-visible:ring-0"
         />
 
+        {imageFile && imagePreviewUrl ? (
+          <div className="relative mt-4">
+            <img
+              src={imagePreviewUrl}
+              alt="Selected memory attachment"
+              className="w-full rounded-2xl object-cover"
+            />
+            <button
+              type="button"
+              onClick={() => setImageFile(null)}
+              aria-label="Remove image"
+              className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-black/60 text-white"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        ) : null}
+
         {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       </section>
 
@@ -233,6 +291,7 @@ export default function NewMemoryPage() {
         setTagInput={setTagInput}
         onCommitTag={commitTag}
         onRemoveTag={(tag) => setTags((prev) => prev.filter((existing) => existing !== tag))}
+        onImageSelected={(file) => setImageFile(file)}
       />
 
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>

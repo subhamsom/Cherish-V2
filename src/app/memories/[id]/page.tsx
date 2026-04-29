@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CalendarIcon, MoreVertical, Pencil, Trash2, X } from "lucide-react";
+import imageCompression from "browser-image-compression";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import {
   isoDateFromCreatedAt,
@@ -60,6 +61,8 @@ export default function MemoryViewPage() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const titleWrapRef = useRef<HTMLTextAreaElement | null>(null);
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuPanelRef = useRef<HTMLDivElement | null>(null);
 
   const [memory, setMemory] = useState<Memory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,12 +72,12 @@ export default function MemoryViewPage() {
   const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
   const [details, setDetails] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [signedImageUrl, setSignedImageUrl] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [reminderDateSet, setReminderDateSet] = useState<Set<string>>(new Set());
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -95,15 +98,12 @@ export default function MemoryViewPage() {
       if (error) {
         console.error("Memory fetch failed:", error);
         setMemory(null);
-        setSignedImageUrl(null);
       } else {
-        let nextSignedImageUrl: string | null = null;
+        let nextImageUrl: string | null = null;
         const imagePath = data?.image_url?.trim();
         if (imagePath) {
-          const { data: signedData } = await supabase.storage
-            .from("memories")
-            .createSignedUrl(imagePath, 60 * 60);
-          nextSignedImageUrl = signedData?.signedUrl ?? null;
+          const { data: publicData } = supabase.storage.from("memories").getPublicUrl(imagePath);
+          nextImageUrl = publicData.publicUrl ?? null;
         }
         if (cancelled) return;
         setMemory(data);
@@ -113,8 +113,7 @@ export default function MemoryViewPage() {
             (data?.created_at ? isoDateFromCreatedAt(data.created_at) : todayIsoDateLocal()),
         );
         setDetails(data?.content ?? "");
-        setImageUrl(data?.image_url ?? null);
-        setSignedImageUrl(nextSignedImageUrl);
+        setImageUrl(nextImageUrl);
         setTags((data?.tags as string[] | null) ?? []);
       }
       setLoading(false);
@@ -161,6 +160,19 @@ export default function MemoryViewPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (menuButtonRef.current?.contains(target)) return;
+      if (menuPanelRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [menuOpen]);
 
   function commitTag() {
     const next = normalizeTag(tagInput);
@@ -308,6 +320,7 @@ export default function MemoryViewPage() {
           ) : null}
           <div className="relative">
             <button
+              ref={menuButtonRef}
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
@@ -320,32 +333,33 @@ export default function MemoryViewPage() {
             </button>
 
             {menuOpen ? (
-              <>
-                <div
-                  className="fixed inset-0 z-30"
-                  onPointerDown={() => setMenuOpen(false)}
-                  aria-hidden
-                />
-                <div className="absolute right-0 top-9 z-40 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setConfirmOpen(true);
-                    }}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-sm text-zinc-700 hover:bg-zinc-100"
-                  >
-                    <Trash2 className="size-3.5" />
-                    Delete
-                  </button>
-                </div>
-              </>
+              <div
+                ref={menuPanelRef}
+                className="absolute right-0 top-9 z-50 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setConfirmOpen(true);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-sm text-zinc-700 hover:bg-zinc-100"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </button>
+              </div>
             ) : null}
           </div>
         </div>
       </header>
 
-      <section className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-40 pt-5">
+      <section
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-40 pt-5"
+        onScroll={() => {
+          if (menuOpen) setMenuOpen(false);
+        }}
+      >
         <Textarea
           ref={titleWrapRef}
           value={title}
@@ -402,12 +416,13 @@ export default function MemoryViewPage() {
           className="mt-4 min-h-0 resize-none border-0 bg-transparent p-0 text-lg leading-7 text-zinc-700 shadow-none outline-hidden placeholder:text-zinc-500 focus-visible:ring-0 read-only:cursor-default"
         />
 
-        {imageUrl && signedImageUrl ? (
+        {imageUrl ? (
           <div className="relative mt-4">
             <img
-              src={signedImageUrl}
+              src={imageUrl}
               alt="Memory attachment"
-              className="aspect-[4/3] w-full rounded-2xl object-cover"
+              onClick={() => setLightboxOpen(true)}
+              className="aspect-[4/3] w-full cursor-pointer rounded-2xl object-cover"
             />
             {isEditing ? (
               <button
@@ -457,8 +472,52 @@ export default function MemoryViewPage() {
           setTagInput={setTagInput}
           onCommitTag={commitTag}
           onRemoveTag={(tag) => setTags((prev) => prev.filter((existing) => existing !== tag))}
+          onImageSelected={async (file) => {
+            const {
+              data: { user },
+              error: userError,
+            } = await supabase.auth.getUser();
+            if (userError || !user) return;
+            const compressed = await imageCompression(file, {
+              maxSizeMB: 1,
+              maxWidthOrHeight: 1920,
+              useWebWorker: true,
+            });
+            const imagePath = `${user.id}/${Date.now()}-${file.name}`;
+            const { error: uploadError } = await supabase.storage
+              .from("memories")
+              .upload(imagePath, compressed, {
+                upsert: false,
+                contentType: compressed.type || file.type || "image/jpeg",
+              });
+            if (uploadError) return;
+            const { data: publicData } = supabase.storage.from("memories").getPublicUrl(imagePath);
+            setImageUrl(publicData.publicUrl ?? null);
+          }}
         />
       )}
+
+      {lightboxOpen && imageUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close image preview"
+            className="fixed right-4 top-4 text-white"
+          >
+            <X className="size-6" />
+          </button>
+          <img
+            src={imageUrl}
+            alt="Memory attachment"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-screen max-w-full object-contain"
+          />
+        </div>
+      ) : null}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent showCloseButton={false}>

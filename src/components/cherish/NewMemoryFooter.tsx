@@ -10,6 +10,7 @@ type NewMemoryFooterProps = {
   setTagInput: (value: string) => void;
   onCommitTag: () => void;
   onRemoveTag: (tag: string) => void;
+  onImageSelected?: (file: File) => void;
 };
 
 export function NewMemoryFooter({
@@ -18,13 +19,22 @@ export function NewMemoryFooter({
   setTagInput,
   onCommitTag,
   onRemoveTag,
+  onImageSelected,
 }: NewMemoryFooterProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const [tagInputOpen, setTagInputOpen] = useState(false);
 
   function openTagInput() {
     setTagInputOpen(true);
     requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function handleFileSelection(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file && onImageSelected) onImageSelected(file);
+    event.target.value = "";
   }
 
   return (
@@ -69,9 +79,36 @@ export function NewMemoryFooter({
       </div>
 
       <div className="flex items-center justify-between">
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleFileSelection}
+        />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileSelection}
+        />
         <div className="flex items-center gap-4">
-          <Camera className="size-5 text-zinc-400" />
-          <Image className="size-5 text-zinc-400" />
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            aria-label="Capture image"
+          >
+            <Camera className="size-5 text-zinc-400" />
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryInputRef.current?.click()}
+            aria-label="Choose image"
+          >
+            <Image className="size-5 text-zinc-400" />
+          </button>
           <Paperclip className="size-5 text-zinc-400" />
         </div>
         <span className="text-xs text-zinc-400">attach</span>
