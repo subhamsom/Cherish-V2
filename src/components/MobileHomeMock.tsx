@@ -344,7 +344,6 @@ export default function MobileHomeMock({
                   return (
                     <ReminderCard
                       key={reminder.id}
-                      id={reminder.id}
                       title={reminder.title}
                       note={reminder.note ?? undefined}
                       date={reminder.date}
