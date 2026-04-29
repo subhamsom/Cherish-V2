@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CalendarIcon, MoreVertical, Pencil, Trash2, X } from "lucide-react";
+import imageCompression from "browser-image-compression";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import {
   isoDateFromCreatedAt,
@@ -71,7 +72,6 @@ export default function MemoryViewPage() {
   const [memoryDate, setMemoryDate] = useState(todayIsoDateLocal);
   const [details, setDetails] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [signedImageUrl, setSignedImageUrl] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -98,15 +98,12 @@ export default function MemoryViewPage() {
       if (error) {
         console.error("Memory fetch failed:", error);
         setMemory(null);
-        setSignedImageUrl(null);
       } else {
-        let nextSignedImageUrl: string | null = null;
+        let nextImageUrl: string | null = null;
         const imagePath = data?.image_url?.trim();
         if (imagePath) {
-          const { data: signedData } = await supabase.storage
-            .from("memories")
-            .createSignedUrl(imagePath, 60 * 60);
-          nextSignedImageUrl = signedData?.signedUrl ?? null;
+          const { data: publicData } = supabase.storage.from("memories").getPublicUrl(imagePath);
+          nextImageUrl = publicData.publicUrl ?? null;
         }
         if (cancelled) return;
         setMemory(data);
@@ -116,8 +113,7 @@ export default function MemoryViewPage() {
             (data?.created_at ? isoDateFromCreatedAt(data.created_at) : todayIsoDateLocal()),
         );
         setDetails(data?.content ?? "");
-        setImageUrl(data?.image_url ?? null);
-        setSignedImageUrl(nextSignedImageUrl);
+        setImageUrl(nextImageUrl);
         setTags((data?.tags as string[] | null) ?? []);
       }
       setLoading(false);
@@ -420,10 +416,10 @@ export default function MemoryViewPage() {
           className="mt-4 min-h-0 resize-none border-0 bg-transparent p-0 text-lg leading-7 text-zinc-700 shadow-none outline-hidden placeholder:text-zinc-500 focus-visible:ring-0 read-only:cursor-default"
         />
 
-        {imageUrl && signedImageUrl ? (
+        {imageUrl ? (
           <div className="relative mt-4">
             <img
-              src={signedImageUrl}
+              src={imageUrl}
               alt="Memory attachment"
               onClick={() => setLightboxOpen(true)}
               className="aspect-[4/3] w-full cursor-pointer rounded-2xl object-cover"
@@ -476,10 +472,32 @@ export default function MemoryViewPage() {
           setTagInput={setTagInput}
           onCommitTag={commitTag}
           onRemoveTag={(tag) => setTags((prev) => prev.filter((existing) => existing !== tag))}
+          onImageSelected={async (file) => {
+            const {
+              data: { user },
+              error: userError,
+            } = await supabase.auth.getUser();
+            if (userError || !user) return;
+            const compressed = await imageCompression(file, {
+              maxSizeMB: 1,
+              maxWidthOrHeight: 1920,
+              useWebWorker: true,
+            });
+            const imagePath = `${user.id}/${Date.now()}-${file.name}`;
+            const { error: uploadError } = await supabase.storage
+              .from("memories")
+              .upload(imagePath, compressed, {
+                upsert: false,
+                contentType: compressed.type || file.type || "image/jpeg",
+              });
+            if (uploadError) return;
+            const { data: publicData } = supabase.storage.from("memories").getPublicUrl(imagePath);
+            setImageUrl(publicData.publicUrl ?? null);
+          }}
         />
       )}
 
-      {lightboxOpen && signedImageUrl ? (
+      {lightboxOpen && imageUrl ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
           onClick={() => setLightboxOpen(false)}
@@ -493,7 +511,7 @@ export default function MemoryViewPage() {
             <X className="size-6" />
           </button>
           <img
-            src={signedImageUrl}
+            src={imageUrl}
             alt="Memory attachment"
             onClick={(event) => event.stopPropagation()}
             className="max-h-screen max-w-full object-contain"
