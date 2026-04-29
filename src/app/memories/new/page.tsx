@@ -62,7 +62,8 @@ export default function NewMemoryPage() {
     title.trim().length > 0 ||
     details.trim().length > 0 ||
     tagInput.trim().length > 0 ||
-    tags.length > 0;
+    tags.length > 0 ||
+    imageFile !== null;
 
   useEffect(() => {
     titleRef.current?.focus();
