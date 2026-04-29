@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
       title: trimmedTitle,
       // `content` is NOT NULL + has a length constraint; details are optional.
       // If details are missing, fall back to title so the insert succeeds.
-      content: trimmedDetails || trimmedTitle,
+      content: trimmedDetails ?? null,
       tags: tags ?? null,
       audio_url: audio_url ?? null,
       image_url: image_url ?? null,
