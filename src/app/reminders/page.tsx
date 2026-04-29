@@ -224,7 +224,6 @@ export default function RemindersPage() {
                 {filteredReminders.map((reminder) => (
                   <ReminderCard
                     key={reminder.id}
-                    id={reminder.id}
                     title={reminder.title}
                     note={reminder.note ?? undefined}
                     date={reminder.date}
@@ -356,7 +355,6 @@ export default function RemindersPage() {
               <div className="grid max-h-72 gap-2 overflow-y-auto">
                 {selectedDateReminders.length === 1 ? (
                   <ReminderCard
-                    id={selectedDateReminders[0].id}
                     title={selectedDateReminders[0].title}
                     note={selectedDateReminders[0].note ?? undefined}
                     date={selectedDateReminders[0].date}
@@ -370,7 +368,6 @@ export default function RemindersPage() {
                   selectedDateReminders.map((reminder) => (
                     <ReminderCard
                       key={reminder.id}
-                      id={reminder.id}
                       title={reminder.title}
                       note={reminder.note ?? undefined}
                       date={reminder.date}
