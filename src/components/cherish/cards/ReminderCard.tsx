@@ -2,7 +2,6 @@ import { Clock } from 'lucide-react'
 import { formatReminderDate } from '@/lib/formatReminderDate'
 
 interface ReminderCardProps {
-  id: string
   title: string
   note?: string
   date: string
@@ -12,7 +11,6 @@ interface ReminderCardProps {
 }
 
 export function ReminderCard({
-  id,
   title,
   note,
   date,
