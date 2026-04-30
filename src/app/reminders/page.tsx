@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDate } from "@/lib/formatDate";
 import { Calendar, List, X } from "lucide-react";
-import MobileBottomNav from "@/components/MobileBottomNav";
 import { ReminderCard } from "@/components/cherish/cards/ReminderCard";
 import { ReminderBottomSheet } from "@/components/cherish/ReminderBottomSheet";
 
@@ -387,7 +386,6 @@ export default function RemindersPage() {
         </div>
       ) : null}
 
-      <MobileBottomNav />
     </main>
   );
 }

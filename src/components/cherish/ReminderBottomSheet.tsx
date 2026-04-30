@@ -53,15 +53,15 @@ export function ReminderBottomSheet({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 z-[60] bg-black/40" onClick={onClose} />
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white"
+        className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-2xl bg-white"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mx-auto mt-3 mb-2 h-1 w-10 rounded-full bg-zinc-200" />
         <div className="max-h-[80vh] overflow-y-auto px-5 pt-2 pb-[max(6rem,calc(4.5rem+env(safe-area-inset-bottom)))]">
           <div className="flex items-start justify-between">
-            <span className="font-sans text-xs uppercase tracking-widest text-zinc-400">
+            <span className="font-sans text-xs font-bold uppercase tracking-widest text-zinc-600">
               REMINDER
             </span>
             <button
@@ -78,14 +78,16 @@ export function ReminderBottomSheet({
             {reminder.title}
           </h3>
 
-          <div className="mt-2 flex items-center gap-2 text-sm text-zinc-400">
+          <div className="mt-2 flex items-center gap-2 text-sm font-extrabold text-zinc-600">
             <Calendar size={14} />
             {formatReminderDate(reminder.date, reminder.reminderTime)}
           </div>
 
           {reminder.note ? (
             <>
-              <div className="mt-5 mb-1 text-xs uppercase tracking-widest text-zinc-400">NOTE</div>
+              <div className="mt-5 mb-1 text-xs font-bold uppercase tracking-widest text-zinc-600">
+                NOTE
+              </div>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-600">
                 {reminder.note}
               </p>
@@ -94,7 +96,9 @@ export function ReminderBottomSheet({
 
           {reminder.tags?.length ? (
             <>
-              <div className="mt-4 mb-2 text-xs uppercase tracking-widest text-zinc-400">TAGS</div>
+              <div className="mt-4 mb-2 text-xs font-bold uppercase tracking-widest text-zinc-600">
+                TAGS
+              </div>
               <div className="flex flex-wrap gap-2">
                 {reminder.tags.map((tag) => (
                   <TagPill key={tag} label={tag} readOnly />
@@ -114,7 +118,7 @@ export function ReminderBottomSheet({
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-100 bg-white px-5 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-zinc-100 bg-white px-5 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-3">
           {reminder.completed ? (
             <button
@@ -127,7 +131,7 @@ export function ReminderBottomSheet({
           ) : (
             <button
               type="button"
-              className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#FF6B6C] py-3 text-sm font-semibold text-white"
+              className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#FF6B6C] py-3 text-sm font-bold text-white"
               onClick={() => onMarkDone(reminder.id)}
             >
               <Check size={15} />
