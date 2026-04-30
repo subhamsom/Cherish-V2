@@ -460,6 +460,7 @@ export default function MemoryViewPage() {
                     ? () => setTags((prev) => prev.filter((existing) => existing !== tag))
                     : undefined
                 }
+                readOnly
               />
             ))}
           </div>

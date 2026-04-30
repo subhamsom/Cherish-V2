@@ -3,22 +3,23 @@ interface TagPillProps {
     onRemove?: () => void
     onClick?: () => void
     selected?: boolean
+    readOnly?: boolean
   }
   
-  export function TagPill({ label, onRemove, onClick, selected }: TagPillProps) {
+  export function TagPill({ label, onRemove, onClick, selected, readOnly = false }: TagPillProps) {
     return (
       <span
         onClick={onClick}
         className={`
-          inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm cursor-pointer
+          inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${readOnly ? 'cursor-default' : 'cursor-pointer'}
           transition-colors select-none
           ${selected
-            ? 'bg-zinc-900 text-white border border-zinc-900 shadow-sm'
-            : 'bg-white text-zinc-700 border border-zinc-200 shadow-sm hover:bg-zinc-50'}
+            ? `bg-zinc-900 text-white border border-zinc-900 ${readOnly ? '' : 'shadow-sm'}`
+            : `bg-white text-zinc-700 border border-zinc-200 ${readOnly ? '' : 'shadow-sm hover:bg-zinc-50'}`}
         `}
       >
         {label}
-        {onRemove && (
+        {!readOnly && onRemove && (
           <button
             onClick={e => { e.stopPropagation(); onRemove(); }}
             className="ml-1 text-gray-400 hover:text-gray-600 leading-none"

@@ -74,7 +74,7 @@ export function ReminderBottomSheet({
           {reminder.tags?.length ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {reminder.tags.map((tag) => (
-                <TagPill key={tag} label={tag} />
+                <TagPill key={tag} label={tag} readOnly />
               ))}
             </div>
           ) : null}
