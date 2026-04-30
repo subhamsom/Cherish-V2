@@ -58,7 +58,7 @@ export function MemoryCard({
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-1">
             {tags.map(tag => (
-              <TagPill key={tag} label={tag} />
+              <TagPill key={tag} label={tag} readOnly />
             ))}
           </div>
         )}
