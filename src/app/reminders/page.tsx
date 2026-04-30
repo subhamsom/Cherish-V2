@@ -108,7 +108,7 @@ export default function RemindersPage() {
       setLoading(false);
       return;
     }
-    setReminders((json.reminders as Reminder[]) ?? []);
+    setReminders([...(json.reminders as Reminder[] ?? [])].sort((a, b) => a.date.localeCompare(b.date)));
     setLoading(false);
   }
 
@@ -329,7 +329,7 @@ export default function RemindersPage() {
           }}
           onEdit={(id) => {
             setActiveReminder(null);
-            router.push(`/reminders/${id}`);
+            router.push(`/reminders/${id}/edit`);
           }}
           onDelete={(id) => {
             void deleteReminder(id);
