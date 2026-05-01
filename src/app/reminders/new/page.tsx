@@ -188,15 +188,15 @@ export default function NewReminderPage() {
             onClick={() => setRepeatYearly((prev) => !prev)}
             className={[
               "relative h-6 w-11 rounded-full transition-colors",
-              repeatYearly ? "bg-zinc-900" : "bg-zinc-200",
+              repeatYearly ? "bg-[#FF6B6C]" : "bg-zinc-200",
             ].join(" ")}
             aria-pressed={repeatYearly}
             aria-label="Toggle repeat yearly"
           >
             <span
               className={[
-                "absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform",
-                repeatYearly ? "translate-x-5" : "translate-x-0.5",
+                "absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-all",
+                repeatYearly ? "left-[1.35rem]" : "left-0.5",
               ].join(" ")}
             />
           </button>
