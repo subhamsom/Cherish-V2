@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDate } from "@/lib/formatDate";
-import { Calendar, List, X } from "lucide-react";
+import { X } from "lucide-react";
 import { ReminderCard } from "@/components/cherish/cards/ReminderCard";
+import { TagPill } from "@/components/cherish/common/TagPill";
 import { ReminderBottomSheet } from "@/components/cherish/ReminderBottomSheet";
+import { RemindersViewToggle } from "@/components/cherish/RemindersViewToggle";
 
 function emitRemindersChanged() {
   if (typeof window !== "undefined") {
@@ -36,10 +38,10 @@ type CalendarCell = {
 type ReminderFilter = "all" | "due" | "upcoming" | "past";
 
 const FILTERS: Array<{ id: ReminderFilter; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "due", label: "Due" },
   { id: "upcoming", label: "Upcoming" },
+  { id: "due", label: "Due" },
   { id: "past", label: "Past" },
+  { id: "all", label: "All" },
 ];
 
 function toDateKey(date: Date) {
@@ -93,7 +95,7 @@ export default function RemindersPage() {
   const [error, setError] = useState<string | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [view, setView] = useState<"list" | "calendar">("list");
-  const [activeFilter, setActiveFilter] = useState<ReminderFilter>("all");
+  const [activeFilter, setActiveFilter] = useState<ReminderFilter>("upcoming");
   const [month, setMonth] = useState(startOfMonthUTC(new Date()));
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [activeReminder, setActiveReminder] = useState<Reminder | null>(null);
@@ -117,6 +119,7 @@ export default function RemindersPage() {
   }, []);
 
   const todayKey = toDateKey(new Date());
+  const incompleteCount = reminders.filter((reminder) => reminder.completed !== true).length;
 
   const filteredReminders = reminders.filter((reminder) => {
     const status = reminderStatus(reminder, todayKey);
@@ -163,34 +166,18 @@ export default function RemindersPage() {
   return (
     <main className="min-h-dvh bg-[#fafafa] text-zinc-800">
       <header className="sticky top-0 z-20 border-b border-zinc-200/80 bg-[#fafafa]/95 px-4 py-3 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-xl items-center justify-between gap-3">
-          <h1 className="font-serif text-2xl font-bold text-zinc-900">Reminders</h1>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setView("list")}
-              className={[
-                "rounded-full p-2",
-                view === "list" ? "text-zinc-900" : "text-zinc-400",
-              ].join(" ")}
-              aria-label="List view"
-            >
-              <List size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("calendar")}
-              className={[
-                "rounded-full p-2",
-                view === "calendar" ? "text-zinc-900" : "text-zinc-400",
-              ].join(" ")}
-              aria-label="Calendar view"
-            >
-              <Calendar size={18} />
-            </button>
-          </div>
+        <div className="mx-auto flex w-full max-w-xl items-center justify-center">
+          <h1 className="font-sans text-base font-semibold text-zinc-900">Reminders</h1>
         </div>
       </header>
+
+      <section className="mx-auto w-full max-w-xl px-4 pb-4 pt-5">
+        <p className="font-sans text-xs uppercase tracking-widest text-zinc-500">
+          {incompleteCount === 0 ? "NOTHING ON YOUR MIND" : `${incompleteCount} THINGS ON YOUR MIND`}
+        </p>
+        <h2 className="font-serif text-4xl leading-tight font-bold text-zinc-900">Don&apos;t let these slip.</h2>
+        <RemindersViewToggle view={view} onChange={setView} />
+      </section>
 
       <section className="mx-auto w-full max-w-xl px-4 pb-32 pt-4">
         {loading ? <p className="text-sm text-zinc-500">Loading...</p> : null}
@@ -202,18 +189,12 @@ export default function RemindersPage() {
               {FILTERS.map((filter) => {
                 const active = activeFilter === filter.id;
                 return (
-                  <button
+                  <TagPill
                     key={filter.id}
-                    type="button"
+                    label={filter.label}
+                    selected={active}
                     onClick={() => setActiveFilter(filter.id)}
-                    className={
-                      active
-                        ? "rounded-full bg-gray-800 px-3 py-1 text-sm text-white"
-                        : "rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700"
-                    }
-                  >
-                    {filter.label}
-                  </button>
+                  />
                 );
               })}
             </div>

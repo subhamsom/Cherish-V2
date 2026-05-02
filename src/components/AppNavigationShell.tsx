@@ -40,7 +40,12 @@ export default function AppNavigationShell({ children }: { children: ReactNode }
           </div>
           {showMobileTopBar ? <MobileTopBar /> : null}
           <div className="md:pl-64">
-            <div className="min-h-0 pt-14 pb-32 max-md:pb-32 md:pt-0 md:pb-0">
+            <div
+              className={[
+                "min-h-0 pb-32 max-md:pb-32 md:pt-0 md:pb-0",
+                showMobileTopBar ? "pt-14" : "pt-0",
+              ].join(" ")}
+            >
               {children}
             </div>
           </div>
