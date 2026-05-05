@@ -1,11 +1,5 @@
 import { redirect } from "next/navigation";
 import MobileHomeMock from "@/components/MobileHomeMock";
-import {
-  greetingFirstNameFromUser,
-  mapDbMemoriesToMobileHomeFeed,
-  weeklyActivityStats,
-} from "@/lib/mobileHomeFeedFromDb";
-import { loadPartnerMemoriesForUser } from "@/lib/loadPartnerMemories";
 import { createServerComponentSupabaseClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -38,32 +32,18 @@ export default async function PreviewMobileHomePage() {
     return <MobileHomeMock />;
   }
 
-  const loaded = await loadPartnerMemoriesForUser(supabase, user.id);
+  const partner = await withTimeout(
+    supabase
+      .from("partners")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    "fetchPartner",
+  );
 
-  if (!loaded.ok) {
-    if (loaded.reason === "no_partner") {
-      redirect("/onboarding");
-    }
-    return (
-      <main className="flex min-h-dvh items-center justify-center bg-zinc-100 p-4">
-        <p className="max-w-sm text-center text-sm text-zinc-600">
-          Could not load data for this preview. Please refresh.
-        </p>
-      </main>
-    );
+  if (partner.error || !partner.data) {
+    redirect("/onboarding");
   }
 
-  const feed = mapDbMemoriesToMobileHomeFeed(loaded.rows);
-  const stats = weeklyActivityStats(loaded.rows);
-  const greetingName = greetingFirstNameFromUser(user);
-
-  return (
-    <MobileHomeMock
-      memoriesFromDb={feed}
-      greetingName={greetingName}
-      weeklyStats={stats}
-      liveDataBanner
-      appNavigation
-    />
-  );
+  return <MobileHomeMock appNavigation />;
 }
