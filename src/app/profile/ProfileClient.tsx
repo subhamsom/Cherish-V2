@@ -1,18 +1,10 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { Calendar, Camera, Loader2, Pencil, X } from "lucide-react";
-
-type Partner = {
-  id: string;
-  user_id: string;
-  name: string;
-  photo_url: string | null;
-  relationship_start_date: string | null;
-  bio: string | null;
-};
+import { PARTNER_QUERY_KEY, usePartner } from "@/hooks/usePartner";
 
 function formatPartnerDate(yyyyMmDd: string | null): string | null {
   if (!yyyyMmDd) return null;
@@ -26,12 +18,9 @@ function formatPartnerDate(yyyyMmDd: string | null): string | null {
   return `${day} ${months[month]} ${year}`;
 }
 
-export default function ProfileClient({
-  partner,
-}: {
-  partner: Partner | null;
-}) {
-  const router = useRouter();
+export default function ProfileClient() {
+  const queryClient = useQueryClient();
+  const { data: partner, isLoading, isError } = usePartner();
 
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(partner?.name ?? "");
@@ -44,6 +33,22 @@ export default function ProfileClient({
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  if (isLoading) {
+    return (
+      <main className="min-h-screen p-4">
+        <p className="text-sm text-zinc-500">Loading...</p>
+      </main>
+    );
+  }
+
+  if (isError) {
+    return (
+      <main className="min-h-screen p-4">
+        <p className="text-sm text-zinc-500">Could not load partner.</p>
+      </main>
+    );
+  }
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,8 +79,8 @@ export default function ProfileClient({
         return;
       }
 
+      await queryClient.invalidateQueries({ queryKey: PARTNER_QUERY_KEY });
       setEditOpen(false);
-      router.refresh();
     } finally {
       setSaving(false);
     }
@@ -106,7 +111,7 @@ export default function ProfileClient({
         return;
       }
 
-      router.refresh();
+      await queryClient.invalidateQueries({ queryKey: PARTNER_QUERY_KEY });
     } finally {
       setPhotoUploading(false);
     }

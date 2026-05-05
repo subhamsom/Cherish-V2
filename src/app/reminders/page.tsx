@@ -1,33 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatDate } from "@/lib/formatDate";
 import { X } from "lucide-react";
 import { ReminderCard } from "@/components/cherish/cards/ReminderCard";
 import { TagPill } from "@/components/cherish/common/TagPill";
 import { ReminderBottomSheet } from "@/components/cherish/ReminderBottomSheet";
 import { RemindersViewToggle } from "@/components/cherish/RemindersViewToggle";
+import { REMINDERS_QUERY_KEY, useReminders, type Reminder } from "@/hooks/useReminders";
 
 function emitRemindersChanged() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("cherish-reminders-changed"));
   }
 }
-
-type Reminder = {
-  id: string;
-  user_id: string;
-  partner_id: string;
-  title: string;
-  date: string;
-  note: string | null;
-  tags: string[] | null;
-  recurrence: "none" | "daily" | "weekly" | "monthly" | "yearly" | null;
-  recurring: boolean | null;
-  completed: boolean | null;
-  reminder_time?: string | null;
-};
 
 type CalendarCell = {
   date: Date;
@@ -91,32 +79,14 @@ function reminderStatus(reminder: Reminder, todayKey: string): "due" | "upcoming
 
 export default function RemindersPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const queryClient = useQueryClient();
+  const { data, isLoading, isError } = useReminders();
+  const reminders = data ?? [];
   const [view, setView] = useState<"list" | "calendar">("list");
   const [activeFilter, setActiveFilter] = useState<ReminderFilter>("upcoming");
   const [month, setMonth] = useState(startOfMonthUTC(new Date()));
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [activeReminder, setActiveReminder] = useState<Reminder | null>(null);
-
-  async function loadReminders() {
-    setLoading(true);
-    setError(null);
-    const response = await fetch("/api/reminders");
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setError("Could not load reminders.");
-      setLoading(false);
-      return;
-    }
-    setReminders([...(json.reminders as Reminder[] ?? [])].sort((a, b) => a.date.localeCompare(b.date)));
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    void loadReminders();
-  }, []);
 
   const todayKey = toDateKey(new Date());
   const incompleteCount = reminders.filter((reminder) => reminder.completed !== true).length;
@@ -146,11 +116,7 @@ export default function RemindersPage() {
       body: JSON.stringify({ completed }),
     });
     if (!response.ok) return;
-    setReminders((prev) =>
-      prev.map((reminder) =>
-        reminder.id === id ? { ...reminder, completed } : reminder,
-      ),
-    );
+    void queryClient.invalidateQueries({ queryKey: REMINDERS_QUERY_KEY });
     setActiveReminder(null);
     emitRemindersChanged();
   }
@@ -158,7 +124,7 @@ export default function RemindersPage() {
   async function deleteReminder(id: string) {
     const response = await fetch(`/api/reminders/${id}`, { method: "DELETE" });
     if (!response.ok) return;
-    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
+    void queryClient.invalidateQueries({ queryKey: REMINDERS_QUERY_KEY });
     setActiveReminder((prev) => (prev?.id === id ? null : prev));
     emitRemindersChanged();
   }
@@ -180,10 +146,10 @@ export default function RemindersPage() {
       </section>
 
       <section className="mx-auto w-full max-w-xl px-4 pb-32 pt-4">
-        {loading ? <p className="text-sm text-zinc-500">Loading...</p> : null}
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {isLoading ? <p className="text-sm text-zinc-500">Loading...</p> : null}
+        {isError ? <p className="text-sm text-red-600">Could not load reminders.</p> : null}
 
-        {!loading && !error && view === "list" ? (
+        {!isLoading && !isError && view === "list" ? (
           <section>
             <div className="mb-4 flex flex-wrap gap-2">
               {FILTERS.map((filter) => {
@@ -218,7 +184,7 @@ export default function RemindersPage() {
           </section>
         ) : null}
 
-        {!loading && !error && view === "calendar" ? (
+        {!isLoading && !isError && view === "calendar" ? (
           <section className="mt-2 rounded-2xl bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <button
@@ -310,7 +276,7 @@ export default function RemindersPage() {
           }}
           onEdit={(id) => {
             setActiveReminder(null);
-            router.push(`/reminders/${id}/edit`);
+            router.push(`/reminders/${id}`);
           }}
           onDelete={(id) => {
             void deleteReminder(id);

@@ -18,15 +18,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const partnerId = req.nextUrl.searchParams.get("partner_id");
-  if (!partnerId?.trim()) {
-    return NextResponse.json({ error: "partner_id is required" }, { status: 400 });
+  const partner = await supabaseAuth
+    .from("partners")
+    .select("id, user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (partner.error) {
+    return NextResponse.json({ error: "Could not find partner" }, { status: 500 });
+  }
+
+  const partnerId = partner.data?.id;
+  if (!partnerId) {
+    return NextResponse.json({ error: "Partner not found" }, { status: 404 });
   }
 
   const { data, error } = await supabaseAuth
     .from("memories")
     .select(MEMORY_LIST_SELECT)
-    .eq("partner_id", partnerId.trim())
+    .eq("partner_id", partnerId)
     .order("memory_date", { ascending: false })
     .order("created_at", { ascending: false });
 

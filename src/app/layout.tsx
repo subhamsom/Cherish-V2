@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, DM_Sans } from "next/font/google";
 import AppNavigationShell from "@/components/AppNavigationShell";
+import QueryProvider from "@/components/QueryProvider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -55,7 +56,9 @@ export default function RootLayout({
       className={`${fraunces.variable} ${dmSans.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-[#fafafa]">
-        <AppNavigationShell>{children}</AppNavigationShell>
+        <QueryProvider>
+          <AppNavigationShell>{children}</AppNavigationShell>
+        </QueryProvider>
       </body>
     </html>
   );
