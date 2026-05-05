@@ -11,18 +11,15 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { MobileHomeFeedMemory } from "@/lib/mobileHomeFeedFromDb";
+import { mapDbMemoriesToMobileHomeFeed, weeklyActivityStats } from "@/lib/mobileHomeFeedFromDb";
 import { MemoryCard } from "@/components/cherish/cards/MemoryCard";
 import { ReminderCard } from "@/components/cherish/cards/ReminderCard";
 import { TagPill } from "@/components/cherish/common/TagPill";
-import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
-import type { MobileHomeUpcomingReminder } from "@/lib/resolveSignedInMobileHome";
-
-const SIGN_URL_TTL_SEC = 60 * 60;
-
-function isAbsoluteHttpUrl(s: string) {
-  return /^https?:\/\//i.test(s.trim());
-}
+import { MEMORIES_QUERY_KEY, useMemories, type MemoryRow } from "@/hooks/useMemories";
+import { usePartner } from "@/hooks/usePartner";
+import { REMINDERS_QUERY_KEY, useReminders } from "@/hooks/useReminders";
 
 const ACCENT = "#FF6B6C";
 const HOME_SCROLL_KEY = "cherish:home:scroll-top";
@@ -77,18 +74,7 @@ const DEMO_FEED: MobileHomeFeedMemory[] = [
 ];
 
 export type MobileHomeMockProps = {
-  /**
-   * When provided (including an empty array), replaces the built-in demo feed.
-   * Map DB rows with `mapDbMemoriesToMobileHomeFeed` on the server.
-   */
-  memoriesFromDb?: MobileHomeFeedMemory[];
-  upcomingReminders?: MobileHomeUpcomingReminder[];
-  totalMemoryCount?: number;
-  partnerName?: string;
   greetingName?: string;
-  weeklyStats?: { total: number; voice: number; photo: number };
-  /** Explains that the list is real account data (helps avoid confusing preview with production UI). */
-  liveDataBanner?: boolean;
   /** When true, profile, FAB, and bottom tabs navigate to real app routes (use on /home and signed-in preview). */
   appNavigation?: boolean;
 };
@@ -103,27 +89,37 @@ const navInactiveClass =
   "flex flex-1 flex-col items-center gap-1 py-3 text-zinc-400 transition-colors hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2";
 
 export default function MobileHomeMock({
-  memoriesFromDb,
-  upcomingReminders = [],
-  totalMemoryCount,
-  partnerName,
   greetingName = "Sam",
-  weeklyStats,
   appNavigation = false,
 }: MobileHomeMockProps = {}) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  void queryClient;
+  void MEMORIES_QUERY_KEY;
+  void REMINDERS_QUERY_KEY;
+  const { data: memoryRows = [], isLoading: memoriesLoading } = useMemories();
+  const { data: partnerData } = usePartner();
+  const { data: reminderRows = [] } = useReminders();
   const mainContentRef = useRef<HTMLDivElement>(null);
-  const feed = memoriesFromDb ?? DEMO_FEED;
+  const feed = appNavigation
+    ? mapDbMemoriesToMobileHomeFeed(memoryRows as MemoryRow[])
+    : DEMO_FEED;
+  const upcomingReminders = reminderRows.filter((r) =>
+    r.completed !== true &&
+    (() => {
+      const today = new Date();
+      const end = new Date(today);
+      end.setDate(today.getDate() + 7);
+      const d = new Date(r.date + "T00:00:00");
+      return d >= today && d <= end;
+    })(),
+  );
+  const totalMemoryCount = memoryRows.length;
+  const partnerFirstName = (partnerData?.name ?? greetingName)
+    .trim().split(/\s+/)[0] ?? greetingName;
+  const stats = weeklyActivityStats(memoryRows as MemoryRow[]);
   const [activeTag, setActiveTag] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [signedImageUrls, setSignedImageUrls] = useState<Record<string, string>>({});
-
-  const stats =
-    weeklyStats ??
-    (memoriesFromDb === undefined
-      ? { total: 4, voice: 2, photo: 1 }
-      : { total: 0, voice: 0, photo: 0 });
-  const partnerFirstName = (partnerName ?? greetingName).trim().split(/\s+/)[0] ?? greetingName;
 
   const topTags = useMemo(() => {
     const freq = new Map<string, number>();
@@ -156,42 +152,6 @@ export default function MobileHomeMock({
   }, [feed, activeTag, searchQuery]);
 
   useEffect(() => {
-    let cancelled = false;
-    const toSign = feed.filter(
-      (m) => m.imageStoragePath?.trim() && !isAbsoluteHttpUrl(m.imageStoragePath),
-    );
-    if (toSign.length === 0) {
-      setSignedImageUrls({});
-      return;
-    }
-
-    const supabase = createBrowserSupabaseClient();
-    void Promise.all(
-      toSign.map(async (memory) => {
-        const ref = memory.imageStoragePath?.trim() ?? "";
-        if (!ref) return null;
-        const { data, error } = await supabase.storage
-          .from("memories")
-          .createSignedUrl(ref, SIGN_URL_TTL_SEC);
-        if (error || !data?.signedUrl) return null;
-        return [memory.id, data.signedUrl] as const;
-      }),
-    ).then((pairs) => {
-      if (cancelled) return;
-      const next: Record<string, string> = {};
-      for (const pair of pairs) {
-        if (!pair) continue;
-        next[pair[0]] = pair[1];
-      }
-      setSignedImageUrls(next);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [feed]);
-
-  useEffect(() => {
     const container = mainContentRef.current;
     if (!container) return;
 
@@ -212,6 +172,14 @@ export default function MobileHomeMock({
     if (!container) return;
     sessionStorage.setItem(HOME_SCROLL_KEY, String(container.scrollTop));
   };
+
+  if (memoriesLoading && feed.length === 0) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-[#fafafa]">
+        <p className="text-sm text-zinc-500">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-dvh justify-center bg-[#fafafa]">
@@ -381,12 +349,6 @@ export default function MobileHomeMock({
               </p>
             ) : (
               visible.map((memory) => {
-                const imageRef = memory.imageStoragePath?.trim() ?? "";
-                const resolvedImageUrl = imageRef
-                  ? isAbsoluteHttpUrl(imageRef)
-                    ? imageRef
-                    : signedImageUrls[memory.id]
-                  : undefined;
                 return (
                   <MemoryCard
                     key={memory.id}
@@ -394,7 +356,7 @@ export default function MobileHomeMock({
                     content={memory.excerpt}
                     memoryDate={memory.dateLabel}
                     tags={memory.tags}
-                    imageUrl={resolvedImageUrl}
+                    imageUrl={memory.imageStoragePath ?? undefined}
                     onClick={
                       appNavigation
                         ? () => {
