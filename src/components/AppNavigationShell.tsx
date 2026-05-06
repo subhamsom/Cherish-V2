@@ -12,7 +12,9 @@ import { ScrollChromeProvider } from "@/components/ScrollChromeProvider";
 
 export default function AppNavigationShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const showMobileTopBar = !pathname.startsWith("/reminders");
+  const showMobileTopBar =
+    !pathname.startsWith("/reminders") &&
+    !pathname.startsWith("/partner");
   const isFullScreenCaptureRoute =
     pathname === "/memories/new" ||
     pathname === "/reminders/new" ||

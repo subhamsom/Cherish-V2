@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAuth
     .from("partners")
-    .select("id, user_id, name, photo_url, relationship_start_date, bio, updated_at")
+    .select("id, user_id, name, photo_url, relationship_start_date, bio, pronoun, updated_at")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -40,11 +40,12 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const body = await req.json();
-  const { name, photo_url, relationship_start_date, bio } = body as {
+  const { name, photo_url, relationship_start_date, bio, pronoun } = body as {
     name?: string;
     photo_url?: string | null;
     relationship_start_date?: string | null;
     bio?: string | null;
+    pronoun?: string | null;
   };
 
   const res = NextResponse.json({});
@@ -86,10 +87,11 @@ export async function PUT(req: NextRequest) {
         photo_url: resolvedPhotoUrl,
         relationship_start_date: relationship_start_date ?? null,
         bio: bio ?? null,
+        pronoun: pronoun ?? null,
       },
       { onConflict: "user_id" },
     )
-    .select("id, user_id, name, photo_url, relationship_start_date, bio, updated_at")
+    .select("id, user_id, name, photo_url, relationship_start_date, bio, pronoun, updated_at")
     .maybeSingle();
 
   if (upsertPartner.error) {

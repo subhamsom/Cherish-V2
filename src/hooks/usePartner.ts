@@ -9,6 +9,7 @@ export type Partner = {
   photo_url: string | null;
   relationship_start_date: string | null;
   bio: string | null;
+  pronoun: string | null;
 };
 
 export async function fetchPartner(): Promise<Partner | null> {

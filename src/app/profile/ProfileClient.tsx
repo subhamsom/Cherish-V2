@@ -2,25 +2,23 @@
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import Image from "next/image";
-import { Calendar, Camera, Loader2, Pencil, X } from "lucide-react";
+import { X } from "lucide-react";
+import { PartnerProfileShell } from "@/components/cherish/PartnerProfileShell";
+import { useMemories } from "@/hooks/useMemories";
+import { useReminders } from "@/hooks/useReminders";
 import { PARTNER_QUERY_KEY, usePartner } from "@/hooks/usePartner";
-
-function formatPartnerDate(yyyyMmDd: string | null): string | null {
-  if (!yyyyMmDd) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(yyyyMmDd.trim());
-  if (!match) return yyyyMmDd;
-  const day = Number(match[3]);
-  const month = Number(match[2]) - 1;
-  const year = Number(match[1]);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  if (month < 0 || month > 11) return yyyyMmDd;
-  return `${day} ${months[month]} ${year}`;
-}
 
 export default function ProfileClient() {
   const queryClient = useQueryClient();
   const { data: partner, isLoading, isError } = usePartner();
+  const { data: memories } = useMemories();
+  const { data: reminders } = useReminders();
+
+  const memoryCount = memories?.length ?? 0;
+  const recurringCount =
+    reminders?.filter(
+      (r) => r.recurrence === "yearly" || (r.recurrence !== null && r.recurrence !== "none"),
+    ).length ?? 0;
 
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(partner?.name ?? "");
@@ -36,7 +34,7 @@ export default function ProfileClient() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen p-4">
+      <main className="min-h-screen bg-[#fafafa] p-4">
         <p className="text-sm text-zinc-500">Loading...</p>
       </main>
     );
@@ -44,7 +42,7 @@ export default function ProfileClient() {
 
   if (isError) {
     return (
-      <main className="min-h-screen p-4">
+      <main className="min-h-screen bg-[#fafafa] p-4">
         <p className="text-sm text-zinc-500">Could not load partner.</p>
       </main>
     );
@@ -118,98 +116,33 @@ export default function ProfileClient() {
   }
 
   return (
-    <main className="min-h-screen p-4 md:p-6">
-      <section className="mx-auto w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">Partner</h1>
-          <button
-            type="button"
-            onClick={() => setEditOpen(true)}
-            className="inline-flex items-center gap-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700"
-          >
-            <Pencil size={14} />
-            Edit partner
-          </button>
-        </div>
+    <main className="min-h-screen bg-[#fafafa] p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6">
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handlePartnerPhotoSelected}
+      />
 
-        <div className="mt-5 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
-            className="hidden"
-            onChange={handlePartnerPhotoSelected}
-          />
-
-          <div className="flex items-center gap-3">
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                disabled={!partner?.id || photoUploading}
-                onClick={() => photoInputRef.current?.click()}
-                className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-50 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900"
-                aria-label={partner?.photo_url ? "Replace partner photo" : "Add partner photo"}
-              >
-                {partner?.photo_url ? (
-                  <Image
-                    src={partner.photo_url}
-                    alt={`${partner.name} photo`}
-                    width={56}
-                    height={56}
-                    unoptimized
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <Camera className="text-zinc-500 dark:text-zinc-400" size={22} />
-                )}
-                {photoUploading ? (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45"
-                    aria-live="polite"
-                  >
-                    <Loader2 className="size-6 animate-spin text-white" aria-hidden />
-                  </div>
-                ) : null}
-              </button>
-              {partner?.photo_url && !photoUploading ? (
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  className="absolute -bottom-0.5 -right-0.5 flex size-7 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm dark:border-zinc-600 dark:bg-zinc-900"
-                  aria-label="Replace partner photo"
-                >
-                  <Camera size={14} className="text-zinc-700 dark:text-zinc-200" />
-                </button>
-              ) : null}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">Partner</p>
-              <p className="font-medium">{partner?.name ?? "Not set yet"}</p>
-              {partner?.bio?.trim() ? (
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{partner.bio}</p>
-              ) : null}
-              {photoUploadError ? (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{photoUploadError}</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="mt-4 inline-flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <Calendar size={14} />
-            <span>
-              {partner?.relationship_start_date
-                ? `Together since ${formatPartnerDate(partner.relationship_start_date)}`
-                : "Relationship start date not set"}
-            </span>
-          </div>
-        </div>
-      </section>
+      <PartnerProfileShell
+        partner={{
+          name: partner?.name ?? "",
+          photo_url: partner?.photo_url ?? null,
+          relationship_start_date: partner?.relationship_start_date ?? null,
+          bio: partner?.bio ?? null,
+          pronoun: partner?.pronoun ?? null,
+        }}
+        memoryCount={memoryCount}
+        recurringCount={recurringCount}
+        onEditClick={() => setEditOpen(true)}
+        onAvatarClick={() => photoInputRef.current?.click()}
+      />
 
       {editOpen ? (
         <div className="fixed inset-0 z-40 bg-black/40 p-4" onClick={() => setEditOpen(false)}>
           <div
-            className="mx-auto mt-10 w-full max-w-xl rounded-2xl bg-white p-4 dark:bg-zinc-950"
+            className="mx-auto mt-10 w-full max-w-xl rounded-2xl bg-white p-4"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
@@ -226,7 +159,7 @@ export default function ProfileClient() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="e.g. Mansi"
-                  className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2"
                 />
               </label>
 
@@ -237,11 +170,11 @@ export default function ProfileClient() {
                   onChange={(event) => setBio(event.target.value)}
                   rows={4}
                   placeholder="What makes them, them..."
-                  className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2"
                 />
               </label>
 
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="text-xs text-zinc-500">
                 Profile photo: use the camera button on the card above (uploads immediately).
               </p>
 
@@ -251,17 +184,17 @@ export default function ProfileClient() {
                   type="date"
                   value={relationshipStartDate}
                   onChange={(event) => setRelationshipStartDate(event.target.value)}
-                  className="rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2"
                 />
               </label>
 
-              {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
               <div className="mt-2 flex items-center gap-2">
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-xl bg-black px-4 py-2.5 text-white disabled:opacity-60 dark:bg-white dark:text-black"
+                  className="rounded-xl bg-black px-4 py-2.5 text-white disabled:opacity-60"
                 >
                   {saving ? "Saving..." : "Save changes"}
                 </button>
