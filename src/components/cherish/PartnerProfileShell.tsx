@@ -1,8 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { Pencil } from "lucide-react";
+import { Lock, Pencil } from "lucide-react";
 import type { Partner } from "@/hooks/usePartner";
+
+const MEMORY_THRESHOLD = 30;
 
 type PartnerProfileShellPartner = Pick<
   Partner,
@@ -131,6 +133,14 @@ export function PartnerProfileShell({
 
   const displayName = partner.name.trim() || "Partner";
   const initialLetter = displayName.charAt(0).toUpperCase() || "?";
+  const subjectPronoun =
+    partner.pronoun === "he" ? "HE" :
+    partner.pronoun === "they" ? "THEY" :
+    "SHE";
+  const possessivePronoun =
+    partner.pronoun === "he" ? "HIS" :
+    partner.pronoun === "they" ? "THEIR" :
+    "HER";
 
   return (
     <div className="bg-[#fafafa] pb-6">
@@ -230,25 +240,102 @@ export function PartnerProfileShell({
           </div>
         </section>
 
-        <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
-          <div className="flex flex-col items-center text-center">
-            <p className="font-serif text-lg font-bold text-zinc-900">
-              Cherish is still getting to know {displayName}.
+        {memoryCount < MEMORY_THRESHOLD ? (
+          <>
+            <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
+              <div className="flex flex-col items-center text-center">
+                <p className="font-serif text-lg font-bold text-zinc-900">
+                  Cherish is still getting to know {displayName}.
+                </p>
+                <p className="mt-2 font-sans text-sm font-normal text-zinc-500">
+                  Save more specific moments and she&apos;ll start coming alive here.
+                </p>
+                <p className="mt-4 font-sans text-xs font-normal text-zinc-400">
+                  {Math.min(memoryCount, 15)} of 15 moments saved
+                </p>
+                <div className="mt-2 h-1 w-full rounded-full bg-zinc-100">
+                  <div
+                    className="h-1 rounded-full bg-[#FF6B6C]"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
+              <p className="mb-3 font-serif text-xs uppercase tracking-widest text-zinc-900">
+                {subjectPronoun} LOVES
+              </p>
+              <div className="blur-sm select-none">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-xs text-[#FF6B6C]">♥</span>
+                    <span className="font-sans text-sm text-zinc-800">
+                      The quiet corner of any room
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-xs text-[#FF6B6C]">♥</span>
+                    <span className="font-sans text-sm text-zinc-800">
+                      Mornings before anyone else is awake
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-xs text-[#FF6B6C]">♥</span>
+                    <span className="font-sans text-sm text-zinc-800">
+                      Books she already knows the ending of
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2 border-t border-zinc-100 pt-4">
+                <Lock size={12} className="shrink-0 text-zinc-400" />
+                <p className="font-sans text-xs text-zinc-400">
+                  Save {MEMORY_THRESHOLD} moments to unlock
+                </p>
+              </div>
+            </section>
+
+            <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
+              <p className="mb-3 font-serif text-xs uppercase tracking-widest text-zinc-900">
+                {possessivePronoun} RITUALS
+              </p>
+              <div className="blur-sm select-none">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-xs text-[#FF6B6C]">♥</span>
+                    <span className="font-sans text-sm text-zinc-800">
+                      First chai before anything else
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-xs text-[#FF6B6C]">♥</span>
+                    <span className="font-sans text-sm text-zinc-800">The long way home, always</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-xs text-[#FF6B6C]">♥</span>
+                    <span className="font-sans text-sm text-zinc-800">
+                      Rereading messages she wants to remember
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2 border-t border-zinc-100 pt-4">
+                <Lock size={12} className="shrink-0 text-zinc-400" />
+                <p className="font-sans text-xs text-zinc-400">
+                  Save {MEMORY_THRESHOLD} moments to unlock
+                </p>
+              </div>
+            </section>
+          </>
+        ) : (
+          <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
+            <p className="text-center font-serif text-lg font-bold text-zinc-900">
+              Cherish knows {displayName}.
             </p>
-            <p className="mt-2 font-sans text-sm font-normal text-zinc-500">
-              Save more specific moments and she&apos;ll start coming alive here.
-            </p>
-            <p className="mt-4 font-sans text-xs font-normal text-zinc-400">
-            {Math.min(memoryCount, 15)} of 15 moments saved
-            </p>
-            <div className="mt-2 h-1 w-full rounded-full bg-zinc-100">
-              <div
-                className="h-1 rounded-full bg-[#FF6B6C]"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        </section>
+            <p className="mt-2 text-center font-sans text-sm text-zinc-500">Her profile is ready.</p>
+          </section>
+        )}
       </div>
     </div>
   );
