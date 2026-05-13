@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       memories: {
@@ -44,7 +19,7 @@ export type Database = {
           archived: boolean | null
           audio_url: string | null
           category: string | null
-          content: string
+          content: string | null
           created_at: string | null
           id: string
           image_url: string | null
@@ -63,7 +38,7 @@ export type Database = {
           archived?: boolean | null
           audio_url?: string | null
           category?: string | null
-          content: string
+          content?: string | null
           created_at?: string | null
           id?: string
           image_url?: string | null
@@ -82,7 +57,7 @@ export type Database = {
           archived?: boolean | null
           audio_url?: string | null
           category?: string | null
-          content?: string
+          content?: string | null
           created_at?: string | null
           id?: string
           image_url?: string | null
@@ -146,31 +121,43 @@ export type Database = {
       }
       partners: {
         Row: {
+          ai_cards: Json | null
+          ai_generated_at: string | null
+          ai_memory_count: number | null
           bio: string | null
           created_at: string | null
           id: string
           name: string
           photo_url: string | null
+          pronoun: string | null
           relationship_start_date: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          ai_cards?: Json | null
+          ai_generated_at?: string | null
+          ai_memory_count?: number | null
           bio?: string | null
           created_at?: string | null
           id?: string
           name: string
           photo_url?: string | null
+          pronoun?: string | null
           relationship_start_date?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          ai_cards?: Json | null
+          ai_generated_at?: string | null
+          ai_memory_count?: number | null
           bio?: string | null
           created_at?: string | null
           id?: string
           name?: string
           photo_url?: string | null
+          pronoun?: string | null
           relationship_start_date?: string | null
           updated_at?: string | null
           user_id?: string
@@ -503,9 +490,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
