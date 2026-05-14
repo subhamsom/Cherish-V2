@@ -2,6 +2,7 @@
 
 import { AIProfileCard } from "@/components/cherish/AIProfileCard";
 import { AIProfileLoading } from "@/components/cherish/AIProfileLoading";
+import { AskMeAnythingCard } from "@/components/cherish/AskMeAnythingCard";
 import Image from "next/image";
 import { Lock, Pencil } from "lucide-react";
 import type { Partner } from "@/hooks/usePartner";
@@ -248,10 +249,12 @@ export function PartnerProfileShell({
 
         {memoryCount < MEMORY_THRESHOLD ? (
           <>
+            <div className="mt-4 border-t-2 border-zinc-200" aria-hidden />
+
             <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
               <div className="flex flex-col items-center text-center">
                 <p className="font-serif text-lg font-bold text-zinc-900">
-                  Cherish is still getting to know {displayName}.
+                  Cherish is still getting to know {displayName.split(" ")[0]}.
                 </p>
                 <p className="mt-2 font-sans text-sm font-normal text-zinc-500">
                   Save more specific moments and she&apos;ll start coming alive here.
@@ -339,11 +342,27 @@ export function PartnerProfileShell({
             {aiLoading ? (
               <AIProfileLoading />
             ) : aiCards.length > 0 ? (
-              <div className="flex flex-col gap-4">
-                {aiCards.map((card, index) => (
-                  <AIProfileCard key={index} card={card} isFirst={index === 0} />
-                ))}
-              </div>
+              <>
+                <div className="mt-6">
+                  <AIProfileCard key={0} card={aiCards[0]} isFirst={true} />
+                </div>
+                {aiCards.length > 1 ? (
+                  <section className="mt-6">
+                    <div className="mb-6 border-t-2 border-zinc-200" />
+                    <p className="mb-4 font-serif text-sm font-bold uppercase tracking-widest text-[#FF6B6C]">
+                      WHAT CHERISH NOTICED
+                    </p>
+                    <div className="flex flex-col gap-4">
+                      {aiCards.slice(1).map((card, index) => (
+                        <AIProfileCard key={index + 1} card={card} isFirst={false} />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+                <div className="mt-4">
+                  <AskMeAnythingCard name={displayName.split(" ")[0]} />
+                </div>
+              </>
             ) : (
               <p className="py-8 text-center font-sans text-sm text-zinc-400">
                 Building her profile...

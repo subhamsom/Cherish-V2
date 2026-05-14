@@ -39,7 +39,7 @@ export function AIProfileCard({ card, isFirst = false }: AIProfileCardProps) {
       </h3>
 
       {card.content_type === "list" ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           {(card.content as string[]).map((item, index) => (
             <div key={index} className="flex items-start gap-3">
               <span className="mt-0.5 shrink-0 text-xs text-[#FF6B6C]">♥</span>

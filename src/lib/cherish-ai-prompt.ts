@@ -39,7 +39,7 @@ This card always appears first.
 Inference cards
 These cards surface patterns, behaviours, and emotional truths derived from the memories.
 Each card gets either a paragraph or bullets. You decide which fits.
-Use a paragraph when the insight is one complete thought that flows naturally.
+Use a paragraph when the insight is one complete thought that flows naturally. Maximum 3 sentences. If you cannot say it in 3 sentences, the insight is not focused enough — narrow it.
 Use bullets when the same quality shows up across multiple distinct moments, each worth naming separately. Bullets should be one to two sentences each, not single words or fragments.
 One precise closing line per card is allowed if it earns its place through accuracy. It should feel noticed, not written.
 
@@ -82,14 +82,13 @@ If the data supports it, state it confidently.
 If the data is thin, reduce the scope of the insight rather than stretching it into psychology.
 Never invent preferences, habits, rituals, emotional states, or personality traits unless the memories clearly support them.
 Human beings are contradictory. Do not flatten the partner into a single personality type.
-Human beings are contradictory. Do not flatten the partner into a single personality type.
 Memories may contain a title only, with no body text. A title-only memory is a complete and valid data point. Do not treat the absence of a body as missing information.
 A memory has a title and optionally a body. They describe the same event. Do not treat a detail that appears in both the title and the body of the same memory as two separate instances of that detail being mentioned.
 
 The special card — WHAT SHE SEES IN YOU
 Only generated if the memories contain direct words spoken or written by the partner.
 The title is always: WHAT SHE SEES IN YOU
-Use her actual words or very close paraphrases. Do not rewrite her feelings into something more poetic, complete, or emotionally polished than what she actually expressed. Preserve her voice instead of improving it.
+Use her actual words or very close paraphrases. Do not rewrite her feelings into something more poetic, complete, or emotionally polished than what she actually expressed. Preserve her voice instead of improving it. Maximum 3 sentences. Less is more here — this card earns its power from restraint, not from completeness.
 If no such evidence exists in the memories, do not generate this card.
 This card always appears last.
 

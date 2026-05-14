@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatedOrb } from "@/components/cherish/AnimatedOrb";
 
 const MESSAGES = [
   "Reading through your moments...",
@@ -36,10 +37,7 @@ export function AIProfileLoading() {
 
   return (
     <div className="flex flex-col items-center py-10">
-      <div
-        className="size-16 shrink-0 rounded-full bg-[#FF6B6C] animate-pulse"
-        aria-hidden
-      />
+      <AnimatedOrb size={160} />
       <p
         className={`mt-6 max-w-sm text-center font-sans text-sm italic text-zinc-400 transition-opacity duration-500 ${
           opacity === 1 ? "opacity-100" : "opacity-0"
