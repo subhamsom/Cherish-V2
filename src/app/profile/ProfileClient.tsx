@@ -1,17 +1,42 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { PartnerProfileShell } from "@/components/cherish/PartnerProfileShell";
 import { useMemories } from "@/hooks/useMemories";
 import { useReminders } from "@/hooks/useReminders";
-import { PARTNER_QUERY_KEY, usePartner } from "@/hooks/usePartner";
+import { PARTNER_QUERY_KEY, usePartner, type Partner } from "@/hooks/usePartner";
+
+function AiProfileHydration({
+  partner,
+  memoryCount,
+  setAiCards,
+  generateAiProfile,
+}: {
+  partner: Partner;
+  memoryCount: number;
+  setAiCards: Dispatch<SetStateAction<unknown[]>>;
+  generateAiProfile: () => Promise<void>;
+}) {
+  useEffect(() => {
+    const stored = (partner as Partner & { ai_cards?: unknown }).ai_cards;
+    if (Array.isArray(stored) && stored.length > 0) {
+      setAiCards(stored as unknown[]);
+      return;
+    }
+    if (memoryCount >= 10) {
+      void generateAiProfile();
+    }
+  }, []);
+
+  return null;
+}
 
 export default function ProfileClient() {
   const queryClient = useQueryClient();
   const { data: partner, isLoading, isError } = usePartner();
-  const { data: memories } = useMemories();
+  const { data: memories, isPending: memoriesPending } = useMemories();
   const { data: reminders } = useReminders();
 
   const memoryCount = memories?.length ?? 0;
@@ -31,6 +56,26 @@ export default function ProfileClient() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [aiCards, setAiCards] = useState<unknown[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const generateAiProfile = useCallback(async () => {
+    setAiLoading(true);
+    try {
+      const response = await fetch("/api/ai-profile", { method: "POST" });
+      const json = (await response.json().catch(() => ({}))) as { cards?: unknown; error?: string };
+
+      if (response.ok && Array.isArray(json.cards)) {
+        setAiCards(json.cards);
+      } else {
+        console.error("AI profile generation failed", json);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAiLoading(false);
+    }
+  }, []);
 
   if (isLoading) {
     return (
@@ -125,6 +170,15 @@ export default function ProfileClient() {
         onChange={handlePartnerPhotoSelected}
       />
 
+      {partner && !memoriesPending ? (
+        <AiProfileHydration
+          partner={partner}
+          memoryCount={memoryCount}
+          setAiCards={setAiCards}
+          generateAiProfile={generateAiProfile}
+        />
+      ) : null}
+
       <PartnerProfileShell
         partner={{
           name: partner?.name ?? "",
@@ -137,6 +191,8 @@ export default function ProfileClient() {
         recurringCount={recurringCount}
         onEditClick={() => setEditOpen(true)}
         onAvatarClick={() => photoInputRef.current?.click()}
+        aiCards={aiCards}
+        aiLoading={aiLoading}
       />
 
       {editOpen ? (

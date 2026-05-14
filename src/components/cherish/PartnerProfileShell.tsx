@@ -1,10 +1,12 @@
 "use client";
 
+import { AIProfileCard } from "@/components/cherish/AIProfileCard";
+import { AIProfileLoading } from "@/components/cherish/AIProfileLoading";
 import Image from "next/image";
 import { Lock, Pencil } from "lucide-react";
 import type { Partner } from "@/hooks/usePartner";
 
-const MEMORY_THRESHOLD = 30;
+const MEMORY_THRESHOLD = 10;
 
 type PartnerProfileShellPartner = Pick<
   Partner,
@@ -17,6 +19,8 @@ export type PartnerProfileShellProps = {
   recurringCount: number;
   onEditClick: () => void;
   onAvatarClick?: () => void;
+  aiCards: unknown[];
+  aiLoading: boolean;
 };
 
 const ONES = [
@@ -125,6 +129,8 @@ export function PartnerProfileShell({
   recurringCount,
   onEditClick,
   onAvatarClick,
+  aiCards,
+  aiLoading,
 }: PartnerProfileShellProps) {
   const { label: durationLabel, months: monthsTogether } = calculateRelationshipDuration(
     partner.relationship_start_date,
@@ -329,12 +335,21 @@ export function PartnerProfileShell({
             </section>
           </>
         ) : (
-          <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
-            <p className="text-center font-serif text-lg font-bold text-zinc-900">
-              Cherish knows {displayName}.
-            </p>
-            <p className="mt-2 text-center font-sans text-sm text-zinc-500">Her profile is ready.</p>
-          </section>
+          <>
+            {aiLoading ? (
+              <AIProfileLoading />
+            ) : aiCards.length > 0 ? (
+              <div className="flex flex-col gap-4">
+                {aiCards.map((card, index) => (
+                  <AIProfileCard key={index} card={card} isFirst={index === 0} />
+                ))}
+              </div>
+            ) : (
+              <p className="py-8 text-center font-sans text-sm text-zinc-400">
+                Building her profile...
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
