@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
+import { AIProfileLoading } from "@/components/cherish/AIProfileLoading";
 import { PartnerProfileShell } from "@/components/cherish/PartnerProfileShell";
 import { useMemories } from "@/hooks/useMemories";
 import { useReminders } from "@/hooks/useReminders";
 import { PARTNER_QUERY_KEY, usePartner, type Partner } from "@/hooks/usePartner";
+
+let aiProfileGenerateStarted = false;
 
 function AiProfileHydration({
   partner,
@@ -60,6 +63,10 @@ export default function ProfileClient() {
   const [aiLoading, setAiLoading] = useState(false);
 
   const generateAiProfile = useCallback(async () => {
+    if (aiLoading || aiProfileGenerateStarted) {
+      return;
+    }
+    aiProfileGenerateStarted = true;
     setAiLoading(true);
     try {
       const response = await fetch("/api/ai-profile", { method: "POST" });
@@ -67,15 +74,18 @@ export default function ProfileClient() {
 
       if (response.ok && Array.isArray(json.cards)) {
         setAiCards(json.cards);
+        aiProfileGenerateStarted = true;
       } else {
         console.error("AI profile generation failed", json);
+        aiProfileGenerateStarted = false;
       }
     } catch (err) {
       console.error(err);
+      aiProfileGenerateStarted = false;
     } finally {
       setAiLoading(false);
     }
-  }, []);
+  }, [aiLoading]);
 
   if (isLoading) {
     return (
@@ -90,6 +100,20 @@ export default function ProfileClient() {
       <main className="min-h-screen bg-[#fafafa] p-4">
         <p className="text-sm text-zinc-500">Could not load partner.</p>
       </main>
+    );
+  }
+
+  if (aiLoading && partner) {
+    const firstName = partner.name.trim().split(" ")[0] || partner.name.trim();
+    const possessivePronoun =
+      partner.pronoun === "she" ? "her" : partner.pronoun === "he" ? "his" : "their";
+
+    return (
+      <AIProfileLoading
+        firstName={firstName}
+        memoryCount={memoryCount}
+        possessivePronoun={possessivePronoun}
+      />
     );
   }
 

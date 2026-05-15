@@ -1,7 +1,6 @@
 "use client";
 
 import { AIProfileCard } from "@/components/cherish/AIProfileCard";
-import { AIProfileLoading } from "@/components/cherish/AIProfileLoading";
 import { AskMeAnythingCard } from "@/components/cherish/AskMeAnythingCard";
 import Image from "next/image";
 import { Lock, Pencil } from "lucide-react";
@@ -339,9 +338,7 @@ export function PartnerProfileShell({
           </>
         ) : (
           <>
-            {aiLoading ? (
-              <AIProfileLoading />
-            ) : aiCards.length > 0 ? (
+            {aiCards.length > 0 ? (
               <>
                 <div className="mt-6">
                   <AIProfileCard key={0} card={aiCards[0]} isFirst={true} />
