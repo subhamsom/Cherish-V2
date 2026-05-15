@@ -138,7 +138,9 @@ export function PartnerProfileShell({
   const progressPercent = Math.min((memoryCount / 15) * 100, 100);
 
   const displayName = partner.name.trim() || "Partner";
+  const firstName = displayName.split(" ")[0] || displayName;
   const initialLetter = displayName.charAt(0).toUpperCase() || "?";
+  const hasAiCards = Array.isArray(aiCards) && aiCards.length > 0;
   const subjectPronoun =
     partner.pronoun === "he" ? "HE" :
     partner.pronoun === "they" ? "THEY" :
@@ -210,7 +212,7 @@ export function PartnerProfileShell({
             <h1
               className={`font-serif text-4xl font-bold tracking-tight text-zinc-900 ${durationLabel ? "mt-2" : "mt-4"}`}
             >
-              {displayName}
+              {firstName}
             </h1>
 
             <p className="mt-2 font-sans text-sm font-normal text-zinc-500">
@@ -338,7 +340,7 @@ export function PartnerProfileShell({
           </>
         ) : (
           <>
-            {aiCards.length > 0 ? (
+            {hasAiCards ? (
               <>
                 <div className="mt-6">
                   <AIProfileCard key={0} card={aiCards[0]} isFirst={true} />

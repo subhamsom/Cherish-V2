@@ -26,12 +26,13 @@ function AiProfileHydration({
     const stored = (partner as Partner & { ai_cards?: unknown }).ai_cards;
     if (Array.isArray(stored) && stored.length > 0) {
       setAiCards(stored as unknown[]);
+      aiProfileGenerateStarted = true;
       return;
     }
     if (memoryCount >= 10) {
       void generateAiProfile();
     }
-  }, []);
+  }, [partner, memoryCount, generateAiProfile]);
 
   return null;
 }
@@ -75,6 +76,7 @@ export default function ProfileClient() {
       if (response.ok && Array.isArray(json.cards)) {
         setAiCards(json.cards);
         aiProfileGenerateStarted = true;
+        await queryClient.invalidateQueries({ queryKey: PARTNER_QUERY_KEY });
       } else {
         console.error("AI profile generation failed", json);
         aiProfileGenerateStarted = false;
@@ -85,7 +87,7 @@ export default function ProfileClient() {
     } finally {
       setAiLoading(false);
     }
-  }, [aiLoading]);
+  }, [aiLoading, queryClient]);
 
   if (isLoading) {
     return (

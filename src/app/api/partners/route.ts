@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAuth
     .from("partners")
-    .select("id, user_id, name, photo_url, relationship_start_date, bio, pronoun, updated_at")
+    .select("id, user_id, name, photo_url, relationship_start_date, bio, pronoun, ai_cards, updated_at")
     .eq("user_id", user.id)
     .maybeSingle();
 
