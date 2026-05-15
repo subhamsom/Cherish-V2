@@ -154,7 +154,9 @@ export function ConstellationCanvas() {
           p.y = ty;
         } else {
           p.x += (tx - p.x) * 0.07;
-          p.y += (ty - p.y) * 0.07;
+          if (p.y !== null) {
+            p.y += (ty - p.y) * 0.07;
+          }
         }
       });
 
