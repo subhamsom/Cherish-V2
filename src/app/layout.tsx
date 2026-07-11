@@ -26,7 +26,8 @@ export const metadata: Metadata = {
     default: "Cherish",
     template: "%s · Cherish",
   },
-  description: "Capture and revisit memories with your partner.",
+  description:
+    "A portrait of the person you love. Save the moments — Cherish shows you what they mean.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

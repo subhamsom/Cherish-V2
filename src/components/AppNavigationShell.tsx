@@ -25,6 +25,8 @@ export default function AppNavigationShell({ children }: { children: ReactNode }
   const hideNav =
     pathname === "/" ||
     pathname === "/home" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
     isFullScreenCaptureRoute ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/preview/");

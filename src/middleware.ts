@@ -11,6 +11,7 @@ export async function middleware(req: NextRequest) {
   // Allow Next.js internals/static assets.
   if (
     pathname.startsWith("/_next") ||
+    pathname.startsWith("/landing/") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt"
   ) {
@@ -51,8 +52,13 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    // Landing + static UI previews are public; everything else requires auth.
-    if (pathname === "/" || pathname.startsWith("/preview/")) {
+    // Landing, legal pages, and static UI previews are public; everything else requires auth.
+    if (
+      pathname === "/" ||
+      pathname === "/privacy" ||
+      pathname === "/terms" ||
+      pathname.startsWith("/preview/")
+    ) {
       return NextResponse.next();
     }
 

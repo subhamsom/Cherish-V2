@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDate } from "@/lib/formatDate";
 import { X } from "lucide-react";
@@ -24,6 +24,15 @@ type CalendarCell = {
 };
 
 type ReminderFilter = "all" | "due" | "upcoming" | "past";
+
+const VALID_FILTERS: ReminderFilter[] = ["all", "due", "upcoming", "past"];
+
+function filterFromSearchParam(value: string | null): ReminderFilter {
+  if (value && VALID_FILTERS.includes(value as ReminderFilter)) {
+    return value as ReminderFilter;
+  }
+  return "upcoming";
+}
 
 const FILTERS: Array<{ id: ReminderFilter; label: string }> = [
   { id: "upcoming", label: "Upcoming" },
@@ -78,12 +87,23 @@ function reminderStatus(reminder: Reminder, todayKey: string): "due" | "upcoming
 }
 
 export default function RemindersPage() {
+  return (
+    <Suspense fallback={null}>
+      <RemindersPageInner />
+    </Suspense>
+  );
+}
+
+function RemindersPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useReminders();
   const reminders = data ?? [];
   const [view, setView] = useState<"list" | "calendar">("list");
-  const [activeFilter, setActiveFilter] = useState<ReminderFilter>("upcoming");
+  const [activeFilter, setActiveFilter] = useState<ReminderFilter>(() =>
+    filterFromSearchParam(searchParams.get("filter")),
+  );
   const [month, setMonth] = useState(startOfMonthUTC(new Date()));
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [activeReminder, setActiveReminder] = useState<Reminder | null>(null);

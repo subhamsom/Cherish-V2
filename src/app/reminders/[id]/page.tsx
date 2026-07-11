@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CalendarIcon } from "lucide-react";
 import { todayIsoDateLocal } from "@/lib/formatDate";
 import { ReminderCaptureFooter } from "@/components/cherish/ReminderCaptureFooter";
-import { TimePickerPopover } from "@/components/cherish/TimePickerPopover";
+import { ReminderDateEmailNote } from "@/components/cherish/ReminderDateEmailNote";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -46,13 +46,6 @@ function normalizeTag(raw: string) {
   return raw.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-function toTimeValue(value?: string | null) {
-  if (!value) return null;
-  const match = value.match(/T(\d{2}:\d{2})/);
-  if (match?.[1]) return match[1];
-  return /^\d{2}:\d{2}$/.test(value) ? value : null;
-}
-
 export default function EditReminderPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -64,7 +57,6 @@ export default function EditReminderPage() {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(todayIsoDateLocal);
   const [note, setNote] = useState("");
-  const [reminderTime, setReminderTime] = useState<string | null>(null);
   const [repeatYearly, setRepeatYearly] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -90,7 +82,6 @@ export default function EditReminderPage() {
       setTitle(found?.title ?? "");
       setDate(found?.date ?? todayIsoDateLocal());
       setNote(found?.note ?? "");
-      setReminderTime(toTimeValue(found?.reminder_time));
       setRepeatYearly(found?.recurrence === "yearly");
       setTags((found?.tags ?? []).map((tag) => normalizeTag(tag)));
       setLoading(false);
@@ -134,7 +125,7 @@ export default function EditReminderPage() {
           date,
           note: note.trim() || null,
           tags: tags.length ? tags : null,
-          reminder_time: reminderTime ? `${date}T${reminderTime}:00` : null,
+          reminder_time: null,
           recurrence: repeatYearly ? "yearly" : "none",
           type: "occasion",
         }),
@@ -157,7 +148,6 @@ export default function EditReminderPage() {
     }
     const baselineTags = new Set((original.tags ?? []).map((tag) => normalizeTag(tag)));
     const currentTags = new Set(tags.map((tag) => normalizeTag(tag)));
-    const originalReminderTime = toTimeValue(original.reminder_time);
     const tagsChanged =
       baselineTags.size !== currentTags.size ||
       Array.from(baselineTags).some((tag) => !currentTags.has(tag));
@@ -167,7 +157,6 @@ export default function EditReminderPage() {
       date !== original.date ||
       note.trim() !== (original.note ?? "").trim() ||
       tagsChanged ||
-      reminderTime !== originalReminderTime ||
       repeatYearly !== (original.recurrence === "yearly") ||
       tagInput.trim().length > 0;
 
@@ -252,10 +241,7 @@ export default function EditReminderPage() {
               />
             </PopoverContent>
           </Popover>
-        </div>
-
-        <div className="mt-2">
-          <TimePickerPopover value={reminderTime} onChange={setReminderTime} />
+          <ReminderDateEmailNote />
         </div>
 
         <div className="mt-3 flex items-center justify-between">

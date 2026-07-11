@@ -24,7 +24,7 @@
 ## PRODUCT OVERVIEW
 
 ### Vision
-A relationship memory companion app for romantic partners that captures, organizes, and celebrates intimate moments through text, voice, photos, and reminders.
+**Superseded — see `CHERISH_V2_NORTH_STAR.md` for the current vision (AI partner persona + Ask tab).** The rest of this document's screen flows, states, and interaction details for the Home/Reminders/Partner tabs are still a useful execution reference.
 
 ### Target User
 Someone in a romantic relationship who wants to remember and cherish special moments with their partner.

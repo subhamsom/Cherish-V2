@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarIcon } from "lucide-react";
 import { todayIsoDateLocal } from "@/lib/formatDate";
 import { ReminderCaptureFooter } from "@/components/cherish/ReminderCaptureFooter";
-import { TimePickerPopover } from "@/components/cherish/TimePickerPopover";
+import { ReminderDateEmailNote } from "@/components/cherish/ReminderDateEmailNote";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -44,7 +44,6 @@ export default function NewReminderPage() {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(todayIsoDateLocal);
   const [note, setNote] = useState("");
-  const [reminderTime, setReminderTime] = useState<string | null>(null);
   const [repeatYearly, setRepeatYearly] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -59,7 +58,6 @@ export default function NewReminderPage() {
     note.trim().length > 0 ||
     tagInput.trim().length > 0 ||
     tags.length > 0 ||
-    reminderTime !== null ||
     repeatYearly === true;
 
   useEffect(() => {
@@ -93,7 +91,7 @@ export default function NewReminderPage() {
           date,
           note: note.trim() || null,
           tags: tags.length ? tags : null,
-          reminder_time: reminderTime ? `${date}T${reminderTime}:00` : null,
+          reminder_time: null,
           recurrence: repeatYearly ? "yearly" : "none",
           type: "occasion",
         }),
@@ -175,10 +173,7 @@ export default function NewReminderPage() {
               />
             </PopoverContent>
           </Popover>
-        </div>
-
-        <div className="mt-2">
-          <TimePickerPopover value={reminderTime} onChange={setReminderTime} />
+          <ReminderDateEmailNote />
         </div>
 
         <div className="mt-3 flex items-center justify-between">
