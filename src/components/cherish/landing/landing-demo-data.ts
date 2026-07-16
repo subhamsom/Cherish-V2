@@ -92,11 +92,18 @@ export const DEMO_PORTRAIT_CARDS: DemoPortraitCard[] = [
   },
 ];
 
-export const DEMO_ASK = {
-  question: "What should I get her for her birthday? Something personal.",
-  answer:
-    "She folded a page in the book you mentioned once — she reads what you read. Start there. The sequel, with a note inside.",
-};
+export const DEMO_ASK_EXCHANGES = [
+  {
+    question: "What should I get her for her birthday? Something personal.",
+    answer:
+      "She folded a page in the book you mentioned once — she reads what you read. Start there. The sequel, with a note inside.",
+  },
+  {
+    question: "It's been a heavy week for her.",
+    answer:
+      "Tea, the porch, no plans. She said those Sundays were her favorite — no reason it can't be a Wednesday.",
+  },
+];
 
 export type DemoReminder = {
   title: string;
@@ -108,12 +115,21 @@ export type DemoReminder = {
 export function demoReminders(): DemoReminder[] {
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const tomorrowIso = tomorrow.toISOString().slice(0, 10);
   return [
     {
       title: "Book the table for Friday",
       note: "The corner one, by the window.",
       date: todayIso,
       urgent: true,
+    },
+    {
+      title: "Ask how the interview went",
+      note: "She was nervous about Thursday.",
+      date: tomorrowIso,
+      urgent: false,
     },
     {
       title: "Her birthday",

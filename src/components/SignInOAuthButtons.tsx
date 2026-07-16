@@ -1,11 +1,17 @@
 "use client";
 
+import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 
 const ACCENT = "#FF6B6C";
 
-export default function SignInOAuthButtons() {
+export type SignInOAuthButtonsProps = {
+  /** Small nav-style pill instead of the full-width primary button. */
+  compact?: boolean;
+};
+
+export default function SignInOAuthButtons({ compact = false }: SignInOAuthButtonsProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +41,28 @@ export default function SignInOAuthButtons() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (compact) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <button
+          type="button"
+          onClick={() => void signInWithGoogle()}
+          disabled={loading}
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95 disabled:opacity-60"
+          style={{ backgroundColor: ACCENT }}
+        >
+          {loading ? "Opening Google…" : "Sign in"}
+          <ArrowRight size={14} aria-hidden />
+        </button>
+        {error ? (
+          <p className="text-xs text-red-600" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
   return (
